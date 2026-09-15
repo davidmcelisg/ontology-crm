@@ -1,0 +1,379 @@
+_meta:
+  version: 1
+  description: >
+    Runtime ontology declarations for the personal CRM. This file is data, not
+    code. The loader reads it to build the type registry, the link registry, the
+    validator, and the Action schemas handed to the LLM ingestion layer.
+
+  # The meta-schema: the only attribute types the loader understands.
+  # Keep this list small. Every entry is code the validator must grow.
+  attribute_types:
+    - string        # short single-line text
+    - text          # long free text
+    - int
+    - bool
+    - date
+    - datetime
+    - enum          # requires: values
+    - ref           # requires: target (type name or list of type names)
+    - list          # requires: of (an attribute type); ref lists are many-to-many
+
+  axiom_kinds:
+    - distinct      # all named attributes point at different objects
+    - not_equal     # two named attributes differ
+    - date_order    # earlier <= later, when both present
+
+config:
+  self_person_id: person:david
+  id_style: slug          # person:ana-ruiz, org:bain-cdmx
+
+
+# ---------------------------------------------------------------------------
+# OBJECT TYPES
+# ---------------------------------------------------------------------------
+
+object_types:
+
+  Person:
+    title_attribute: display_name
+    attributes:
+      display_name: { type: string, required: true }
+      given_name:   { type: string }
+      family_name:  { type: string }
+      aliases:      { type: list, of: string }
+      based_in:     { type: string }
+      notes:        { type: text }
+
+  Organization:
+    title_attribute: name
+    id_prefix: org
+    attributes:
+      name:     { type: string, required: true }
+      kind:
+        type: enum
+        required: true
+        values: [company, university, student_org, nonprofit, government, other]
+      location: { type: string }
+      parent:
+        type: ref
+        target: Organization
+        link_name: org_parent
+        inverse_name: subsidiaries
+      notes:    { type: text }
+
+  Affiliation:
+    title_attribute: role_title
+    id_prefix: aff
+    attributes:
+      person:
+        type: ref
+        target: Person
+        required: true
+        link_name: affiliation_of
+        inverse_name: affiliations
+      organization:
+        type: ref
+        target: Organization
+        required: true
+        link_name: affiliation_at
+        inverse_name: affiliates
+      role_title: { type: string }
+      kind:
+        type: enum
+        required: true
+        values: [employee, intern, student, founder, member, alumnus,
+                 contractor, advisor]
+      seniority:
+        type: enum
+        values: [ic, senior, manager, director, vp, executive]
+      start_date: { type: date }
+      end_date:   { type: date }   # absent means current
+    axioms:
+      - { kind: date_order, earlier: start_date, later: end_date }
+
+  Relationship:
+    title_attribute: kind
+    id_prefix: rel
+    attributes:
+      from_person:
+        type: ref
+        target: Person
+        required: true
+        link_name: relationship_from
+        inverse_name: outgoing_relationships
+      to_person:
+        type: ref
+        target: Person
+        required: true
+        link_name: relationship_to
+        inverse_name: incoming_relationships
+      kind:
+        type: enum
+        required: true
+        values: [family, friend, colleague, classmate, mentor, mentee,
+                 recruiter, acquaintance]
+      strength:       { type: int }     # 1-5, as perceived by from_person
+      origin_context: { type: string }
+      origin_interaction:
+        type: ref
+        target: Interaction
+        link_name: relationship_origin
+        inverse_name: relationships_begun
+    axioms:
+      - { kind: not_equal, a: from_person, b: to_person }
+
+  Interaction:
+    title_attribute: subject
+    attributes:
+      occurred_at: { type: datetime, required: true }
+      channel:
+        type: enum
+        required: true
+        values: [in_person, call, video, email, text, whatsapp, linkedin, other]
+      direction:
+        type: enum
+        required: true
+        values: [outbound, inbound, mutual]     # relative to config.self_person_id
+      participants:
+        type: list
+        of: ref
+        target: Person
+        required: true
+        link_name: interaction_participant
+        inverse_name: interactions
+      subject:          { type: string }
+      summary:          { type: text }
+      expects_response: { type: bool }
+      in_reply_to:
+        type: ref
+        target: Interaction
+        link_name: interaction_reply_to
+        inverse_name: replies
+      about:
+        type: list
+        of: ref
+        target: [Pursuit, Organization]
+        link_name: interaction_about
+        inverse_name: interactions
+
+  Introduction:
+    title_attribute: context
+    id_prefix: intro
+    attributes:
+      introducer:
+        type: ref
+        target: Person
+        required: true
+        link_name: intro_introducer
+        inverse_name: introductions_made
+      introduced_a:
+        type: ref
+        target: Person
+        required: true
+        link_name: intro_party_a
+        inverse_name: introductions_received
+      introduced_b:
+        type: ref
+        target: Person
+        required: true
+        link_name: intro_party_b
+        inverse_name: introductions_received
+      occurred_at: { type: date, required: true }
+      context:     { type: text }
+      resulting_interaction:
+        type: ref
+        target: Interaction
+        link_name: intro_result
+        inverse_name: resulted_from_introduction
+    axioms:
+      - { kind: distinct, attributes: [introducer, introduced_a, introduced_b] }
+
+  Pursuit:
+    title_attribute: target_role
+    attributes:
+      kind:
+        type: enum
+        required: true
+        values: [job_application, recruiting_process, business_development,
+                 fellowship, grad_school]
+      target_organization:
+        type: ref
+        target: Organization
+        required: true
+        link_name: pursuit_target
+        inverse_name: pursuits
+      target_role: { type: string }
+      stage:       { type: string, required: true }
+      outcome:
+        type: enum
+        required: true
+        values: [open, offer, rejected, withdrawn, stale]
+      opened_at: { type: date, required: true }
+      closed_at: { type: date }
+      referred_by:
+        type: ref
+        target: Person
+        link_name: pursuit_referrer
+        inverse_name: referrals_given
+      originated_in:
+        type: ref
+        target: Introduction
+        link_name: pursuit_origin
+        inverse_name: pursuits_begun
+    axioms:
+      - { kind: date_order, earlier: opened_at, later: closed_at }
+
+  Commitment:
+    title_attribute: description
+    attributes:
+      obligor:
+        type: ref
+        target: Person
+        required: true
+        link_name: commitment_obligor
+        inverse_name: commitments_owed
+      obligee:
+        type: ref
+        target: Person
+        required: true
+        link_name: commitment_obligee
+        inverse_name: commitments_due_to_me
+      description: { type: string, required: true }
+      created_in:
+        type: ref
+        target: Interaction
+        link_name: commitment_created_in
+        inverse_name: commitments_created
+      due_date: { type: date }
+      fulfilled_by:
+        type: ref
+        target: Interaction
+        link_name: commitment_fulfilled_by
+        inverse_name: commitments_fulfilled
+
+
+# ---------------------------------------------------------------------------
+# CLAIM ENVELOPE
+# ---------------------------------------------------------------------------
+# Fixed machinery, declared here so nothing is hardcoded in the store.
+
+claim_envelope:
+  attributes:
+    id:          { type: string,   required: true }   # supersedes points at this
+    object_type: { type: string,   required: true }
+    object_id:   { type: string,   required: true }
+    asserted_at: { type: datetime, required: true }   # when I learned it
+    valid_from:  { type: date }                       # when it became true
+    valid_to:    { type: date }                       # when it stopped
+    source_kind:
+      type: enum
+      required: true
+      values: [self_observed, told_by_person, document, inferred, prompt]
+    source_person: { type: ref, target: Person }
+    source_note:   { type: text }
+    supersedes:    { type: ref, target: Claim }
+    # True when this claim withdraws the one named in supersedes. Retraction is
+    # an append like everything else -- no claim is ever edited in place.
+    is_retraction: { type: bool, required: true }
+  axioms:
+    - { kind: date_order, earlier: valid_from, later: valid_to }
+
+  resolution:
+    rule: latest_valid
+    order_by: asserted_at
+    description: >
+      Current state of an object is the body of its latest non-retracted claim
+      by asserted_at whose validity window contains the evaluation time.
+
+
+# ---------------------------------------------------------------------------
+# ACTIONS
+# ---------------------------------------------------------------------------
+# The only permitted mutations. Action schemas are handed to the LLM; it cannot
+# express anything outside this vocabulary.
+#
+# `parameters: inherit` means: take the parameter list from the object type named
+# in `creates`. Avoids restating every attribute twice.
+
+actions:
+
+  CreatePerson:
+    creates: Person
+    parameters: inherit
+
+  CreateOrganization:
+    creates: Organization
+    parameters: inherit
+
+  AssertAffiliation:
+    creates: Affiliation
+    parameters: inherit
+
+  EndAffiliation:
+    updates: Affiliation
+    parameters:
+      affiliation: { type: ref, target: Affiliation, required: true }
+      end_date:    { type: date, required: true }
+
+  AssertRelationship:
+    creates: Relationship
+    parameters: inherit
+
+  RecordInteraction:
+    creates: Interaction
+    parameters: inherit
+
+  RecordIntroduction:
+    creates: Introduction
+    parameters: inherit
+
+  OpenPursuit:
+    creates: Pursuit
+    parameters: inherit
+
+  AdvancePursuit:
+    updates: Pursuit
+    parameters:
+      pursuit: { type: ref, target: Pursuit, required: true }
+      stage:   { type: string, required: true }
+      outcome:
+        type: enum
+        values: [open, offer, rejected, withdrawn, stale]
+
+  MakeCommitment:
+    creates: Commitment
+    parameters: inherit
+
+  FulfillCommitment:
+    updates: Commitment
+    parameters:
+      commitment:   { type: ref, target: Commitment, required: true }
+      fulfilled_by: { type: ref, target: Interaction, required: true }
+
+  MergePersons:
+    special: entity_resolution
+    parameters:
+      keep:  { type: ref, target: Person, required: true }
+      merge: { type: ref, target: Person, required: true }
+    axioms:
+      - { kind: not_equal, a: keep, b: merge }
+
+# Every action additionally accepts the claim envelope fields:
+#   asserted_at, valid_from, valid_to, source_kind, source_person, source_note
+
+
+# ---------------------------------------------------------------------------
+# FUNCTIONS
+# ---------------------------------------------------------------------------
+# Declared here for discoverability; implemented in Python. Nothing below is
+# ever stored.
+
+functions:
+  open_threads:           { returns: [Interaction] }
+  outstanding_commitments: { returns: [Commitment], parameters: [side] }
+  who_do_i_know_at:       { returns: [Affiliation],  parameters: [organization] }
+  path_to:                { returns: path,           parameters: [target] }
+  pursuit_board:          { returns: [Pursuit] }
+  going_stale:            { returns: [Relationship], parameters: [months] }
+  why_do_i_believe:       { returns: [Claim],        parameters: [object_id] }
+  reciprocity:            { returns: summary,        parameters: [person] }

@@ -1,0 +1,12 @@
+# Real network data never gets committed. The sample file is fake and does.
+data/claims.jsonl
+data/*.local.jsonl
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.DS_Store
+.idea/
+.vscode/
