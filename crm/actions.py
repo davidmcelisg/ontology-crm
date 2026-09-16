@@ -69,14 +69,7 @@ def execute(store: ClaimStore, action_name: str, params: dict[str, Any]) -> Acti
     registry = store.registry
     action = registry.action(action_name)
 
-    # Every claim needs a timestamp and a source, but a caller should not have
-    # to supply them. Fill them before validating rather than declaring them
-    # optional -- a claim without provenance is the thing we are preventing.
-    supplied = dict(params)
-    if supplied.get("asserted_at") is None:
-        supplied["asserted_at"] = datetime.now(timezone.utc)
-    if supplied.get("source_kind") is None:
-        supplied["source_kind"] = "prompt"
+    supplied = with_envelope_defaults(params)
 
     normalized, errors = validate_action(registry, action_name, supplied, exists=store.exists)
     if errors:
@@ -95,6 +88,22 @@ def execute(store: ClaimStore, action_name: str, params: dict[str, Any]) -> Acti
         return _do_merge(store, action_name, body, envelope)
 
     raise ActionError(f"{action_name} declares no executable effect")
+
+
+def with_envelope_defaults(params: dict[str, Any]) -> dict[str, Any]:
+    """Fill the envelope fields a caller should not have to supply.
+
+    Every claim needs a timestamp and a source, so these are declared required
+    rather than optional -- a claim without provenance is the thing the design
+    exists to prevent. The default belongs here, in one place, so that dry-run
+    validation and execution agree on what is valid.
+    """
+    supplied = dict(params)
+    if supplied.get("asserted_at") is None:
+        supplied["asserted_at"] = datetime.now(timezone.utc)
+    if supplied.get("source_kind") is None:
+        supplied["source_kind"] = "prompt"
+    return supplied
 
 
 def _do_create(

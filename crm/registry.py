@@ -254,6 +254,9 @@ class Registry:
             )
         return self.actions[name]
 
+    def has_action(self, name: str) -> bool:
+        return name in self.actions
+
     def action_names(self) -> list[str]:
         return sorted(self.actions)
 

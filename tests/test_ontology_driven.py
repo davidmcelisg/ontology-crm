@@ -232,6 +232,54 @@ def test_derived_state_cannot_drift():
     assert len(functions.open_threads(store)["they_owe_me"]) == 0
 
 
+def test_ingestion_cannot_write_an_invalid_graph():
+    """The model can only speak in declared actions, and a bad one blocks the batch."""
+    import json
+
+    from crm import ingest
+    from crm.actions import ActionError
+
+    store = fresh_store(load_ontology(ONTOLOGY))
+    from crm.actions import execute
+    execute(store, "CreatePerson", {"display_name": "David"})
+    execute(store, "CreatePerson", {"display_name": "Rosa"})
+
+    def stub_bad(system_prompt, user_prompt):
+        return json.dumps({"actions": [
+            {"action": "RecordInteraction", "params": {
+                "occurred_at": "2026-09-14T11:00:00", "channel": "smoke_signal",
+                "direction": "mutual", "participants": ["person:david", "person:rosa"]}},
+        ]})
+
+    proposal = ingest.propose(store, "note", stub_bad, today="2026-09-15")
+    assert not proposal.valid
+    before = store.claim_count()
+    try:
+        ingest.apply(store, proposal)
+        raise AssertionError("apply should have refused")
+    except ActionError:
+        pass
+    assert store.claim_count() == before      # nothing written
+
+    def stub_good(system_prompt, user_prompt):
+        return json.dumps({"actions": [
+            {"action": "RecordInteraction", "params": {
+                "occurred_at": "2026-09-14T11:00:00", "channel": "in_person",
+                "direction": "mutual", "participants": ["person:david", "person:rosa"],
+                "subject": "coffee"}},
+        ]})
+
+    proposal = ingest.propose(store, "note", stub_good, today="2026-09-15")
+    assert proposal.valid
+    results = ingest.apply(store, proposal)
+    assert len(results) == 1
+    assert store.claim_count() == before + 1
+
+    # The schemas the model was given came from the ontology, not from a string.
+    schemas = ingest.action_schemas(store.registry)
+    assert set(schemas) == set(store.registry.action_names())
+
+
 def main():
     tests = [
         test_a_new_object_type_needs_no_code_change,
@@ -240,6 +288,7 @@ def main():
         test_a_merge_is_one_claim_and_reversible,
         test_updates_need_no_per_action_code,
         test_derived_state_cannot_drift,
+        test_ingestion_cannot_write_an_invalid_graph,
     ]
     failures = 0
     for test in tests:
