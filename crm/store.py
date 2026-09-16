@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any
 
 from .registry import Registry
@@ -131,7 +131,7 @@ class ClaimStore:
             object_id=merge_id,
             changes={},
             body={},
-            asserted_at=asserted_at or datetime.now(),
+            asserted_at=asserted_at or datetime.now(timezone.utc),
             source_kind=source_kind,
             source_note=source_note,
             redirect_to=keep_id,
@@ -211,7 +211,7 @@ class ClaimStore:
         holds snapshots.
         """
         if asserted_at is None:
-            asserted_at = datetime.now()
+            asserted_at = datetime.now(timezone.utc)
 
         object_id = self.canonical(object_id)
         changes = self._canonicalize_refs(type_name, changes)
@@ -271,7 +271,7 @@ class ClaimStore:
             object_id=target.object_id,
             changes={},
             body={},
-            asserted_at=asserted_at or datetime.now(),
+            asserted_at=asserted_at or datetime.now(timezone.utc),
             source_kind=source_kind,
             source_note=source_note,
             supersedes=claim_id,
@@ -338,7 +338,7 @@ class ClaimStore:
         if as_of is None:
             as_of = date.today()
         if known_as_of is None:
-            known_as_of = datetime.now()
+            known_as_of = datetime.now(timezone.utc)
 
         applicable: list[Claim] = []
 

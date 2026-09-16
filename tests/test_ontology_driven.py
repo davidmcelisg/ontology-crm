@@ -10,7 +10,7 @@ import os
 import shutil
 import sys
 import tempfile
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -103,14 +103,14 @@ def test_the_two_clocks_disagree():
     store.assert_object(
         "Affiliation", "aff:xy",
         {"person": "person:x", "organization": "org:y", "kind": "employee"},
-        source_kind="self_observed", asserted_at=datetime(2024, 1, 1),
+        source_kind="self_observed", asserted_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
     )
     store.assert_object(
         "Affiliation", "aff:xy", {"end_date": "2025-06-30"},
-        source_kind="told_by_person", asserted_at=datetime(2026, 3, 1),
+        source_kind="told_by_person", asserted_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
     )
 
-    believed_in_2025 = store.resolve("aff:xy", known_as_of=datetime(2025, 1, 1))
+    believed_in_2025 = store.resolve("aff:xy", known_as_of=datetime(2025, 1, 1, tzinfo=timezone.utc))
     believed_now = store.resolve("aff:xy")
 
     assert believed_in_2025.get("end_date") is None
@@ -126,15 +126,15 @@ def test_retraction_undoes_inherited_values():
     store.assert_object(
         "Affiliation", "aff:xy",
         {"person": "person:x", "organization": "org:y", "kind": "employee", "role_title": "Analyst"},
-        source_kind="self_observed", asserted_at=datetime(2024, 1, 1),
+        source_kind="self_observed", asserted_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
     )
     promotion = store.assert_object(
         "Affiliation", "aff:xy", {"role_title": "Manager", "seniority": "manager"},
-        source_kind="told_by_person", asserted_at=datetime(2025, 1, 1),
+        source_kind="told_by_person", asserted_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
     )
     store.assert_object(
         "Affiliation", "aff:xy", {"end_date": "2026-01-31"},
-        source_kind="self_observed", asserted_at=datetime(2026, 2, 1),
+        source_kind="self_observed", asserted_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
     )
 
     assert store.resolve("aff:xy")["role_title"] == "Manager"

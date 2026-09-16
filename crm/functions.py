@@ -14,7 +14,7 @@ knows they exist even though the logic lives in Python.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from . import query
@@ -217,7 +217,7 @@ def going_stale(
     and Interaction carries dates I did not.
     """
     me = _me(store)
-    cutoff = datetime.now() - timedelta(days=months * 30)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=months * 30)
 
     last_seen: dict[str, datetime] = {}
     for body in store.all_of_type("Interaction").values():

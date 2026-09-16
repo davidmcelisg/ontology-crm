@@ -16,7 +16,7 @@ re-parse and possibly skip the check.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, Callable
 
 from .registry import AttributeDef, AxiomDef, Registry
@@ -234,15 +234,22 @@ def _parse_date(path: str, value: Any) -> tuple[Any, list[ValidationError]]:
 
 def _parse_datetime(path: str, value: Any) -> tuple[Any, list[ValidationError]]:
     if isinstance(value, datetime):
-        return value, []
+        return _as_utc(value), []
     if isinstance(value, date):
-        return datetime(value.year, value.month, value.day), []
+        return datetime(value.year, value.month, value.day, tzinfo=timezone.utc), []
     if isinstance(value, str):
         try:
-            return datetime.fromisoformat(value), []
+            return _as_utc(datetime.fromisoformat(value)), []
         except ValueError:
             return value, [ValidationError(path, f"{value!r} is not a timestamp")]
     return value, [ValidationError(path, "must be a timestamp")]
+
+
+def _as_utc(value: datetime) -> datetime:
+    """A timestamp with no zone is ambiguous. Assume UTC and say so."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
 
 
 def _check_ref(

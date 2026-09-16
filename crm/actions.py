@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any
 
 from .store import ClaimStore
@@ -74,7 +74,7 @@ def execute(store: ClaimStore, action_name: str, params: dict[str, Any]) -> Acti
     # optional -- a claim without provenance is the thing we are preventing.
     supplied = dict(params)
     if supplied.get("asserted_at") is None:
-        supplied["asserted_at"] = datetime.now()
+        supplied["asserted_at"] = datetime.now(timezone.utc)
     if supplied.get("source_kind") is None:
         supplied["source_kind"] = "prompt"
 
