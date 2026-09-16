@@ -139,7 +139,12 @@ def where(
 
 
 def title(store: ClaimStore, object_id: str) -> str:
-    """Readable label for an object, using whatever the type nominated."""
+    """Readable label for an object, using whatever the type nominated.
+
+    Types without a title attribute (or with an empty one) are named by who they
+    connect: "Introduction by Teo Marin". That keeps path rendering from using
+    a kind enum or a context sentence as if it were a person's name.
+    """
     type_name = store.type_of(object_id)
     if type_name is None:
         return object_id
@@ -149,13 +154,35 @@ def title(store: ClaimStore, object_id: str) -> str:
         return object_id
 
     attribute_name = store.registry.type(type_name).title_attribute
-    if attribute_name is None:
-        return object_id
+    if attribute_name is not None:
+        value = body.get(attribute_name)
+        if value is not None and str(value).strip():
+            return str(value)
 
-    value = body.get(attribute_name)
-    if value is None:
-        return object_id
-    return str(value)
+    return _composed_title(store, type_name, object_id, body)
+
+
+def _composed_title(
+    store: ClaimStore, type_name: str, object_id: str, body: dict[str, Any]
+) -> str:
+    me = store.registry.self_person_id
+    object_type = store.registry.type(type_name)
+
+    for attribute in object_type.ref_attributes():
+        value = body.get(attribute.name)
+        if value is None:
+            continue
+        refs = value if isinstance(value, list) else [value]
+        for ref in refs:
+            if not isinstance(ref, str):
+                continue
+            if ref == object_id or ref == me:
+                continue
+            label = title(store, ref)
+            if label:
+                return f"{type_name} by {label}"
+
+    return type_name
 
 
 def descendants(store: ClaimStore, object_id: str, attribute: str) -> set[str]:

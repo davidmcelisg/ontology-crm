@@ -92,7 +92,6 @@ object_types:
       - { kind: date_order, earlier: start_date, later: end_date }
 
   Relationship:
-    title_attribute: kind
     id_prefix: rel
     attributes:
       from_person:
@@ -157,7 +156,6 @@ object_types:
         inverse_name: interactions
 
   Introduction:
-    title_attribute: context
     id_prefix: intro
     attributes:
       introducer:

@@ -280,6 +280,37 @@ def test_ingestion_cannot_write_an_invalid_graph():
     assert set(schemas) == set(store.registry.action_names())
 
 
+def test_path_labels_do_not_use_sentences_as_names():
+    """Reified hops are named by who they connect, not by kind or context."""
+    from crm import functions
+
+    store = fresh_store(load_ontology(ONTOLOGY))
+    store.assert_object("Person", "person:david", {"display_name": "David"}, source_kind="self_observed")
+    store.assert_object("Person", "person:teo", {"display_name": "Teo Marin"}, source_kind="self_observed")
+    store.assert_object("Person", "person:ivette", {"display_name": "Ivette Cano"}, source_kind="self_observed")
+    store.assert_object(
+        "Relationship", "rel:david-teo",
+        {"from_person": "person:david", "to_person": "person:teo",
+         "kind": "acquaintance"},
+        source_kind="self_observed",
+    )
+    store.assert_object(
+        "Introduction", "intro:0001",
+        {"introducer": "person:teo", "introduced_a": "person:david",
+         "introduced_b": "person:ivette", "occurred_at": "2026-09-06",
+         "context": "put me in touch before the CTO round"},
+        source_kind="self_observed",
+    )
+
+    assert query.title(store, "rel:david-teo") == "Relationship by Teo Marin"
+    assert query.title(store, "intro:0001") == "Introduction by Teo Marin"
+
+    path = functions.path_to(store, "person:ivette")
+    assert "Introduction by" in path
+    assert "acquaintance" not in path
+    assert "put me in touch before the CTO round" not in path
+
+
 def main():
     tests = [
         test_a_new_object_type_needs_no_code_change,
@@ -289,6 +320,7 @@ def main():
         test_updates_need_no_per_action_code,
         test_derived_state_cannot_drift,
         test_ingestion_cannot_write_an_invalid_graph,
+        test_path_labels_do_not_use_sentences_as_names,
     ]
     failures = 0
     for test in tests:
