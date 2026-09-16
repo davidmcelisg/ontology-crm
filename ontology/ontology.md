@@ -196,12 +196,27 @@ Commitment:
 Symmetric machinery answers both "what did I promise and drop" and "what am I
 waiting on," depending on which side `self_person_id` sits.
 
+### 2.9 Naming objects with no natural name
+
+`Person.display_name` and `Organization.name` are titles anyone would
+recognize as a name. `Relationship` and `Introduction` are not — `kind` is an
+enum like `acquaintance`, and `context` is a sentence, not a name. Declaring
+either as `title_attribute` would make `path_to` output read like a database
+dump instead of a sentence.
+
+So neither type declares one. Where a type has no usable `title_attribute`,
+rendering composes a title from whoever the object connects to instead:
+`Introduction by Teo Marin`. The rule lives once, in `query.title`, and costs
+the type nothing — omitting `title_attribute` is enough to get the composed
+form.
+
 ---
 
 ## 3. Link types
 
 Declared with cardinality so that validation is generic. The engine enforces
-these without any per-type code.
+these without any per-type code. Every `ref` attribute in section 2 derives
+exactly one row here; nothing here is written by hand.
 
 | Link | From | To | Cardinality |
 |---|---|---|---|
@@ -209,17 +224,28 @@ these without any per-type code.
 | `affiliation_at` | Affiliation | Organization | many-to-one |
 | `relationship_from` | Relationship | Person | many-to-one |
 | `relationship_to` | Relationship | Person | many-to-one |
+| `relationship_origin` | Relationship | Interaction | many-to-one |
 | `org_parent` | Organization | Organization | many-to-one |
 | `interaction_participant` | Interaction | Person | many-to-many |
 | `interaction_reply_to` | Interaction | Interaction | many-to-one |
 | `interaction_about` | Interaction | Pursuit \| Organization | many-to-many |
 | `intro_introducer` | Introduction | Person | many-to-one |
-| `intro_party` | Introduction | Person | many-to-many (exactly 2) |
+| `intro_party_a` | Introduction | Person | many-to-one |
+| `intro_party_b` | Introduction | Person | many-to-one |
+| `intro_result` | Introduction | Interaction | many-to-one |
 | `pursuit_target` | Pursuit | Organization | many-to-one |
 | `pursuit_referrer` | Pursuit | Person | many-to-one |
+| `pursuit_origin` | Pursuit | Introduction | many-to-one |
 | `commitment_obligor` | Commitment | Person | many-to-one |
 | `commitment_obligee` | Commitment | Person | many-to-one |
-| `commitment_fulfilled_by` | Commitment | Interaction | one-to-one |
+| `commitment_created_in` | Commitment | Interaction | many-to-one |
+| `commitment_fulfilled_by` | Commitment | Interaction | many-to-one |
+
+`intro_party_a` / `intro_party_b` are two many-to-one links rather than one
+many-to-many, because `introduced_a` and `introduced_b` are separate
+attributes. The `distinct` axiom in section 5 only requires the three
+participants differ, so which one is `introduced_a` versus `introduced_b`
+carries no meaning beyond which attribute holds it.
 
 ---
 
@@ -244,7 +270,9 @@ Claim:
   source_note:    text?         # verbatim prompt text, email subject, etc.
 
   supersedes:     ref(Claim)?
-  retracted:      bool
+  is_retraction:  bool          # true when this claim withdraws `supersedes`
+  redirect_to:    string?       # set by MergePersons; reads follow it, the
+                                # loser's claims stay in the log untouched
 ```
 
 Two time axes, not one. `asserted_at` is when the claim entered your world;
@@ -261,8 +289,8 @@ Storage is an append-only log; state is a fold over it.
 ## 5. Actions
 
 The only permitted way to change the ontology. Each has typed parameters,
-validation, and declared effects. The LLM ingestion layer emits these and nothing
-else, which means it cannot produce an invalid graph.
+validation, and declared effects. The LLM ingestion layer (section 6) emits
+these and nothing else, which means it cannot produce an invalid graph.
 
 | Action | Parameters | Notes |
 |---|---|---|
@@ -303,7 +331,58 @@ Plus a small set of hand-written axioms:
 
 ---
 
-## 6. Functions
+## 6. Ingestion — plain text to Actions
+
+`crm/ingest.py` is where free-text notes become the Actions from section 5.
+It is the payoff of Actions being the only mutation path: the model proposes,
+the ontology decides what is legal, and nothing reaches the store that a
+hand-written caller couldn't also have written.
+
+Two phases, and nothing is written between them:
+
+```
+propose(store, text, complete) -> Proposal        # ask the model, then validate
+apply(store, proposal)         -> [ActionResult]  # execute, in order
+```
+
+**The schema is generated, not written.** `action_schemas()` builds a JSON
+schema per Action straight from the registry — properties, required fields,
+enum values, ref targets. A new Action added to `ontology.yaml` reaches the
+model on the next run with no prompt change.
+
+**A roster does entity resolution before the model has to.** Every known
+object is listed with its id, title, aliases, and up to three linked
+neighbours, so "there are two Anas, but only one is linked to a recruiter
+role" is answerable from the prompt. The model is told to reuse an id from the
+roster rather than mint a new one — which is what keeps `person:ana` and
+`person:ana-ruiz` from becoming two people most of the time. `MergePersons`
+(section 5) is the fallback for when it doesn't.
+
+**Ids are deterministic**, so the model can create an object and reference it
+later in the same batch: `mint_id` slugifies the title attribute, so "Ana
+Ruiz" as a `Person` is always `person:ana-ruiz` — computable before the object
+exists, not just after.
+
+**Validation runs twice against the same rules.** `propose` dry-runs every
+action through the validator so a rejected action is visible before anything
+is confirmed; `apply` re-validates for real at execution time. A proposal that
+validates clean is guaranteed to apply clean.
+
+**The model is injected, not imported.** `propose` takes a `complete(system,
+user) -> text` function, so the whole pipeline runs against a canned stub with
+no API key (`scripts/try_ingest.py` does exactly this), and swapping in
+`anthropic_completer()` for a real model touches no other line.
+
+This is also where P3 earns its keep on the ingestion side: every proposed
+action carries `source_kind: "prompt"` and, when the note names who told you,
+`source_person` — the same provenance fields a hand-typed Action needs, so a
+claim that came from an LLM reading a note is indistinguishable in the log
+from one you asserted yourself, except honestly labelled as `prompt` rather
+than `self_observed`.
+
+---
+
+## 7. Functions
 
 Derived answers. Nothing here is stored.
 
@@ -312,7 +391,7 @@ Derived answers. Nothing here is stored.
 | `open_threads()` | Who owes me a reply, and who am I ignoring |
 | `outstanding_commitments(side)` | What I promised and dropped / what I'm owed |
 | `who_do_i_know_at(org)` | Current affiliations at an org or its children, ranked by relationship strength |
-| `path_to(target)` | Shortest route to a person or org, over Relationship + Affiliation + Introduction |
+| `path_to(target)` | Shortest route to a person or org, over any linked object type — typically Relationship, Affiliation, Introduction, or Commitment |
 | `pursuit_board()` | All open pursuits, stage, and whether a reply is outstanding |
 | `going_stale(months)` | Relationships with strength ≥ 3 and no interaction in N months |
 | `why_do_i_believe(object)` | Full claim chain with sources and dates |
@@ -325,7 +404,7 @@ open thread when the most recent interaction in a reply chain is outbound,
 
 ---
 
-## 7. Known limitations
+## 8. Known limitations
 
 Cut deliberately, and each has a stated reason. Better to have seen a gap coming
 than to be shown it.
@@ -342,4 +421,6 @@ than to be shown it.
 5. **`self` is a config constant**, so the graph is single-perspective. Modelling
    multiple viewpoints would mean parameterising `direction` and `strength`.
 6. **No access control or encryption.** Relevant given the sensitivity of the
-   data; out of scope for the first build.
+   data, and more so once ingestion (section 6) is wired to a real model —
+   `anthropic_completer()` sends note text to a third-party API. Out of scope
+   for the first build.

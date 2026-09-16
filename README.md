@@ -51,4 +51,4 @@ the graph without being able to corrupt it.
 
 ## Known limitations
 
-See section 7 of `ontology/ontology.md`. Each cut has a reason attached.
+See section 8 of `ontology/ontology.md`. Each cut has a reason attached.
