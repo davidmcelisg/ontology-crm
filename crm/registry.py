@@ -271,7 +271,8 @@ class Registry:
 
         for attribute_name, attribute in self.claim_envelope.attributes.items():
             # Identity and lineage are set by the store, not by the caller.
-            if attribute_name in ("id", "object_type", "object_id", "is_retraction", "supersedes"):
+            if attribute_name in ("id", "object_type", "object_id", "is_retraction",
+                                  "supersedes", "redirect_to"):
                 continue
             if attribute_name in merged:
                 continue

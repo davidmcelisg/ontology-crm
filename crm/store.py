@@ -59,6 +59,7 @@ class Claim:
     source_note: str | None = None
     supersedes: str | None = None
     is_retraction: bool = False
+    redirect_to: str | None = None
 
 
 class ClaimStore:
@@ -71,10 +72,123 @@ class ClaimStore:
         self._by_type: dict[str, set[str]] = {}
         self._retracted_claim_ids: set[str] = set()
         self._objects_with_retractions: set[str] = set()
+        self._redirects: dict[str, str] = {}
+        self._redirected_from: dict[str, set[str]] = {}
         self._next_sequence = 1
 
         if os.path.exists(path):
             self._load()
+
+    # -- identity ---------------------------------------------------------
+
+    def canonical(self, object_id: str) -> str:
+        """Follow merge redirects to the surviving object.
+
+        Merging appends one claim rather than rewriting the loser's history, so
+        every read path canonicalizes here instead.
+        """
+        seen: set[str] = set()
+        current = object_id
+
+        while current in self._redirects:
+            if current in seen:
+                break
+            seen.add(current)
+            current = self._redirects[current]
+
+        return current
+
+    def merge(
+        self,
+        merge_id: str,
+        keep_id: str,
+        source_kind: str = "self_observed",
+        source_note: str | None = None,
+        asserted_at: datetime | None = None,
+    ) -> Claim:
+        """Declare that two objects are the same thing.
+
+        Nothing is rewritten or deleted. One claim is appended saying the loser
+        is really the winner, and reads follow it from then on. Retract that
+        claim and the two come apart again with every reference intact.
+        """
+        merge_id = self.canonical(merge_id)
+        keep_id = self.canonical(keep_id)
+
+        if merge_id == keep_id:
+            raise StoreError("cannot merge an object into itself")
+
+        merge_type = self.type_of(merge_id)
+        keep_type = self.type_of(keep_id)
+        if merge_type is None or keep_type is None:
+            raise StoreError("both objects must exist before merging")
+        if merge_type != keep_type:
+            raise StoreError(f"cannot merge a {merge_type} into a {keep_type}")
+
+        claim = Claim(
+            id=self._mint_claim_id(),
+            object_type=merge_type,
+            object_id=merge_id,
+            changes={},
+            body={},
+            asserted_at=asserted_at or datetime.now(),
+            source_kind=source_kind,
+            source_note=source_note,
+            redirect_to=keep_id,
+        )
+        self._append(claim)
+        return claim
+
+    def _canonicalize_refs(
+        self, type_name: str, changes: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Point new claims at surviving objects, so merges do not accumulate."""
+        object_type = self.registry.type(type_name)
+
+        cleaned: dict[str, Any] = {}
+        for name, value in changes.items():
+            attribute = object_type.attributes.get(name)
+            if attribute is None or not attribute.is_ref or value is None:
+                cleaned[name] = value
+                continue
+
+            if isinstance(value, list):
+                mapped = []
+                for item in value:
+                    mapped.append(self.canonical(item) if isinstance(item, str) else item)
+                cleaned[name] = mapped
+            else:
+                cleaned[name] = self.canonical(value) if isinstance(value, str) else value
+
+        return cleaned
+
+    def _rebuild_redirects(self) -> None:
+        """Recompute merges from live claims. Cheap and rare."""
+        self._redirects = {}
+        self._redirected_from = {}
+
+        for claim in self._claims:
+            if claim.redirect_to is None:
+                continue
+            if claim.is_retraction:
+                continue
+            if claim.id in self._retracted_claim_ids:
+                continue
+            self._redirects[claim.object_id] = claim.redirect_to
+
+        for loser_id in self._redirects:
+            winner_id = self.canonical(loser_id)
+            if winner_id not in self._redirected_from:
+                self._redirected_from[winner_id] = set()
+            self._redirected_from[winner_id].add(loser_id)
+
+    def _all_ids_for(self, object_id: str) -> set[str]:
+        """Every id that now means this object, merged-away ones included."""
+        canonical_id = self.canonical(object_id)
+        ids = {canonical_id}
+        for merged_id in self._redirected_from.get(canonical_id, set()):
+            ids.add(merged_id)
+        return ids
 
     # -- writing ----------------------------------------------------------
 
@@ -98,6 +212,9 @@ class ClaimStore:
         """
         if asserted_at is None:
             asserted_at = datetime.now()
+
+        object_id = self.canonical(object_id)
+        changes = self._canonicalize_refs(type_name, changes)
 
         current = self.resolve(object_id)
 
@@ -176,6 +293,7 @@ class ClaimStore:
         The resolution rule from the design doc: the latest non-retracted claim
         by asserted_at whose validity window contains the evaluation time.
         """
+        object_id = self.canonical(object_id)
         applicable = self._applicable_claims(object_id, as_of, known_as_of)
         if not applicable:
             return None
@@ -201,7 +319,7 @@ class ClaimStore:
     ) -> Claim | None:
         """The most recent claim contributing to current state, so callers can
         show where a belief came from."""
-        applicable = self._applicable_claims(object_id, as_of, known_as_of)
+        applicable = self._applicable_claims(self.canonical(object_id), as_of, known_as_of)
         if not applicable:
             return None
         return applicable[-1]
@@ -249,7 +367,9 @@ class ClaimStore:
 
         This is what why_do_i_believe reads.
         """
-        claims = list(self._by_object.get(object_id, []))
+        claims: list[Claim] = []
+        for id_variant in self._all_ids_for(object_id):
+            claims.extend(self._by_object.get(id_variant, []))
         claims.sort(key=lambda claim: claim.asserted_at)
         return claims
 
@@ -271,6 +391,8 @@ class ClaimStore:
 
         resolved: dict[str, dict[str, Any]] = {}
         for object_id in self._by_type[type_name]:
+            if object_id in self._redirects:
+                continue
             body = self.resolve(object_id, as_of, known_as_of)
             if body is not None:
                 resolved[object_id] = body
@@ -287,7 +409,10 @@ class ClaimStore:
         """
         found: list[tuple[str, str, str]] = []
 
-        type_name = self._type_of(object_id)
+        object_id = self.canonical(object_id)
+        matching_ids = self._all_ids_for(object_id)
+
+        type_name = self.type_of(object_id)
         if type_name is None:
             return found
 
@@ -298,9 +423,11 @@ class ClaimStore:
                 if value is None:
                     continue
                 if isinstance(value, list):
-                    if object_id in value:
-                        found.append((link.source_type, candidate_id, link.attribute))
-                elif value == object_id:
+                    for item in value:
+                        if item in matching_ids:
+                            found.append((link.source_type, candidate_id, link.attribute))
+                            break
+                elif value in matching_ids:
                     found.append((link.source_type, candidate_id, link.attribute))
 
         return found
@@ -315,6 +442,7 @@ class ClaimStore:
 
     def type_of(self, object_id: str) -> str | None:
         """Which object type an id belongs to, or None if it is unknown."""
+        object_id = self.canonical(object_id)
         for type_name, ids in self._by_type.items():
             if object_id in ids:
                 return type_name
@@ -355,6 +483,9 @@ class ClaimStore:
             self._retracted_claim_ids.add(claim.supersedes)
             self._objects_with_retractions.add(claim.object_id)
 
+        if claim.redirect_to is not None or claim.is_retraction:
+            self._rebuild_redirects()
+
         sequence = int(claim.id.split(":")[1])
         if sequence >= self._next_sequence:
             self._next_sequence = sequence + 1
@@ -389,6 +520,7 @@ class ClaimStore:
             "source_note": claim.source_note,
             "supersedes": claim.supersedes,
             "is_retraction": claim.is_retraction,
+            "redirect_to": claim.redirect_to,
             "changes": self._encode_body(claim.object_type, claim.changes),
             "body": self._encode_body(claim.object_type, claim.body),
         }
@@ -431,6 +563,7 @@ class ClaimStore:
             source_note=raw.get("source_note"),
             supersedes=raw.get("supersedes"),
             is_retraction=bool(raw.get("is_retraction", False)),
+            redirect_to=raw.get("redirect_to"),
         )
 
 

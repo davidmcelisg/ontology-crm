@@ -272,6 +272,10 @@ claim_envelope:
     source_person: { type: ref, target: Person }
     source_note:   { type: text }
     supersedes:    { type: ref, target: Claim }
+    # Set by MergePersons. Says this object is really another one. Reads follow
+    # the redirect; the loser's claims stay in the log untouched, so retracting
+    # this claim splits the two objects apart again.
+    redirect_to:   { type: string }
     # True when this claim withdraws the one named in supersedes. Retraction is
     # an append like everything else -- no claim is ever edited in place.
     is_retraction: { type: bool, required: true }

@@ -147,6 +147,65 @@ def test_retraction_undoes_inherited_values():
     assert after["end_date"] == date(2026, 1, 31)  # unrelated claim survived
 
 
+def test_a_merge_is_one_claim_and_reversible():
+    """Entity resolution never rewrites history. It appends a redirect."""
+    from crm.actions import execute
+
+    store = fresh_store(load_ontology(ONTOLOGY))
+
+    execute(store, "CreatePerson", {"display_name": "Ana Ruiz", "aliases": ["Ana"]})
+    execute(store, "CreatePerson", {"display_name": "Ana R"})
+    execute(store, "RecordInteraction", {
+        "occurred_at": "2026-05-01T10:00:00", "channel": "call", "direction": "outbound",
+        "participants": ["person:ana-r"],
+    })
+
+    assert len(store.all_of_type("Person")) == 2
+    claims_before = store.claim_count()
+
+    result = execute(store, "MergePersons",
+                     {"keep": "person:ana-ruiz", "merge": "person:ana-r"})
+
+    # One redirect claim plus one alias-absorption claim. Nothing rewritten.
+    assert store.claim_count() == claims_before + 2
+    assert len(store.all_of_type("Person")) == 1
+
+    # The old id still works, and references to it now find the survivor.
+    assert store.resolve("person:ana-r")["display_name"] == "Ana Ruiz"
+    referring = store.referrers("person:ana-ruiz")
+    assert any(entry[0] == "Interaction" for entry in referring)
+
+    # And it comes apart again.
+    store.retract(result.claim_id)
+    assert len(store.all_of_type("Person")) == 2
+    assert store.resolve("person:ana-r")["display_name"] == "Ana R"
+
+
+def test_updates_need_no_per_action_code():
+    """Three unrelated updating actions run through one generic code path."""
+    from crm.actions import execute
+
+    store = fresh_store(load_ontology(ONTOLOGY))
+
+    execute(store, "CreatePerson", {"display_name": "Q"})
+    execute(store, "CreateOrganization", {"name": "R", "kind": "company"})
+    execute(store, "AssertAffiliation", {
+        "person": "person:q", "organization": "org:r", "kind": "employee",
+        "role_title": "Analyst",
+    })
+    execute(store, "OpenPursuit", {
+        "kind": "job_application", "target_organization": "org:r",
+        "stage": "applied", "outcome": "open", "opened_at": "2026-01-01",
+        "target_role": "Strategy Lead",
+    })
+
+    execute(store, "EndAffiliation", {"affiliation": "aff:analyst", "end_date": "2026-06-30"})
+    execute(store, "AdvancePursuit", {"pursuit": "pursuit:strategy-lead", "stage": "onsite"})
+
+    assert store.resolve("aff:analyst")["end_date"] == date(2026, 6, 30)
+    assert store.resolve("pursuit:strategy-lead")["stage"] == "onsite"
+
+
 def test_derived_state_cannot_drift():
     """There is no awaiting_reply field. Answering the message changes the answer."""
     store = fresh_store(load_ontology(ONTOLOGY))
@@ -178,6 +237,8 @@ def main():
         test_a_new_object_type_needs_no_code_change,
         test_the_two_clocks_disagree,
         test_retraction_undoes_inherited_values,
+        test_a_merge_is_one_claim_and_reversible,
+        test_updates_need_no_per_action_code,
         test_derived_state_cannot_drift,
     ]
     failures = 0
