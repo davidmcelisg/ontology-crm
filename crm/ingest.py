@@ -348,16 +348,18 @@ def _parse_json(raw: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def anthropic_completer(model: str = "claude-sonnet-4-5", max_tokens: int = 2000) -> CompleteFn:
+def anthropic_completer(model: str = "claude-sonnet-5", max_tokens: int = 8000) -> CompleteFn:
     """Wire in the Anthropic API. Requires ANTHROPIC_API_KEY and the sdk.
 
-    Imported lazily so the rest of the project has no dependency on it.
+    Imported lazily so the rest of the project has no dependency on it. The
+    client is built once, not per call, so repeated proposals reuse the
+    connection.
     """
+    import anthropic
+
+    client = anthropic.Anthropic()
 
     def complete(system_prompt: str, user_prompt: str) -> str:
-        import anthropic
-
-        client = anthropic.Anthropic()
         response = client.messages.create(
             model=model,
             max_tokens=max_tokens,
@@ -365,10 +367,18 @@ def anthropic_completer(model: str = "claude-sonnet-4-5", max_tokens: int = 2000
             messages=[{"role": "user", "content": user_prompt}],
         )
 
+        # Exposed for callers that want to report cost, without changing the
+        # return type everyone else relies on.
+        complete.last_usage = {
+            "input_tokens": response.usage.input_tokens,
+            "output_tokens": response.usage.output_tokens,
+        }
+
         pieces = []
         for block in response.content:
             if block.type == "text":
                 pieces.append(block.text)
         return "\n".join(pieces)
 
+    complete.last_usage = None
     return complete
