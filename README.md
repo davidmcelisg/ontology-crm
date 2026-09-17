@@ -19,6 +19,8 @@ handle it with no code change.
     python scripts/demo.py                         # answer real questions
     python tests/test_ontology_driven.py           # the four arguments
 
+To run it on your own network, and for the ingestion scripts, see `DEMO.md`.
+
 ## Layout
 
     ontology/ontology.md     design rationale -- why the model is shaped this way
@@ -29,6 +31,9 @@ handle it with no code change.
     crm/store.py             append-only claim log with bitemporal resolution
     crm/query.py             generic graph traversal over the link registry
     crm/functions.py         the named questions. The only file with domain judgement.
+    crm/actions.py           executes the declared actions. The only write path.
+    crm/ingest.py            plain text -> proposed actions, via an injected model
+    scripts/                 seeders, the demo, and the ingestion runners (see DEMO.md)
     data/                    claim logs. Real ones are gitignored.
 
 ## Four design decisions

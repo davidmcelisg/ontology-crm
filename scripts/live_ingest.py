@@ -8,6 +8,7 @@ Usage:
     python scripts/live_ingest.py                 # runs the built-in probes
     python scripts/live_ingest.py "some note"      # runs one note
     python scripts/live_ingest.py --model X "note"
+    python scripts/live_ingest.py --claims data/claims.jsonl "note"   # real network
 """
 
 import os
@@ -197,11 +198,21 @@ def run_probe(store, complete, label, note, checks):
 def main():
     args = list(sys.argv[1:])
     model = "claude-sonnet-5"
+    claims = "data/sample_claims.jsonl"
     if "--model" in args:
         i = args.index("--model")
         model = args[i + 1]
         del args[i:i + 2]
+    if "--claims" in args:
+        i = args.index("--claims")
+        claims = args[i + 1]
+        del args[i:i + 2]
     note = args[0] if args else None
+
+    if note is None and claims != "data/sample_claims.jsonl":
+        print("The built-in probes name people from the sample network; "
+              "pass a note of your own when using --claims.")
+        return 1
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("ANTHROPIC_API_KEY is not set. Export it before running this script: "
@@ -213,7 +224,7 @@ def main():
         print("The anthropic package is not installed. Run: pip install anthropic")
         return 1
 
-    store = ClaimStore(load_ontology("ontology/ontology.yaml"), "data/sample_claims.jsonl")
+    store = ClaimStore(load_ontology("ontology/ontology.yaml"), claims)
     complete = ingest.anthropic_completer(model=model)
 
     results = []
