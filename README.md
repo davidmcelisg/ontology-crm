@@ -19,7 +19,7 @@ handle it with no code change.
     python scripts/demo.py                         # answer real questions
     python tests/test_ontology_driven.py           # the four arguments
 
-To run it on your own network, and for the ingestion scripts, see `DEMO.md`.
+To run it on your own network, and for the ingestion scripts, see `DEMO.md` (the commands) and `CALLS.md` (what each one does).
 
 ## Layout
 
@@ -33,7 +33,7 @@ To run it on your own network, and for the ingestion scripts, see `DEMO.md`.
     crm/functions.py         the named questions. The only file with domain judgement.
     crm/actions.py           executes the declared actions. The only write path.
     crm/ingest.py            plain text -> proposed actions, via an injected model
-    scripts/                 seeders, the demo, and the ingestion runners (see DEMO.md)
+    scripts/                 seeders, the demo, and the ingestion runners (see CALLS.md)
     data/                    claim logs. Real ones are gitignored.
 
 ## Four design decisions
