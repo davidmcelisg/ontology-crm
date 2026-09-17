@@ -311,6 +311,47 @@ def test_path_labels_do_not_use_sentences_as_names():
     assert "put me in touch before the CTO round" not in path
 
 
+def test_same_title_is_a_duplicate_only_when_the_ontology_says_so():
+    """A second "Coffee" is a new interaction; a second "Rosa" is a duplicate."""
+    import json
+
+    from crm import ingest
+    from crm.actions import ActionError, execute
+
+    store = fresh_store(load_ontology(ONTOLOGY))
+    execute(store, "CreatePerson", {"display_name": "David"})
+    execute(store, "CreatePerson", {"display_name": "Rosa"})
+
+    try:
+        execute(store, "CreatePerson", {"display_name": "Rosa"})
+        raise AssertionError("a second Rosa should be rejected, not suffixed")
+    except ActionError:
+        pass
+
+    coffee = {"occurred_at": "2026-09-14T11:00:00", "channel": "in_person", "direction": "mutual",
+              "participants": ["person:david", "person:rosa"], "subject": "Coffee"}
+    first = execute(store, "RecordInteraction", coffee)
+    second = execute(store, "RecordInteraction", dict(coffee, occurred_at="2026-09-20T11:00:00"))
+    assert first.object_id == "interaction:coffee"
+    assert second.object_id == "interaction:coffee-2"
+
+    # The model predicts interaction:coffee for a create it chains from; apply
+    # rewrites that reference to the id actually minted.
+    def stub(system_prompt, user_prompt):
+        return json.dumps({"actions": [
+            {"action": "RecordInteraction", "params": dict(coffee, occurred_at="2026-09-21T11:00:00")},
+            {"action": "MakeCommitment", "params": {
+                "obligor": "person:david", "obligee": "person:rosa",
+                "description": "send the deck", "created_in": "interaction:coffee"}},
+        ]})
+
+    proposal = ingest.propose(store, "note", stub, today="2026-09-22")
+    assert proposal.valid
+    results = ingest.apply(store, proposal)
+    assert results[0].object_id == "interaction:coffee-3"
+    assert store.resolve(results[1].object_id)["created_in"] == "interaction:coffee-3"
+
+
 def main():
     tests = [
         test_a_new_object_type_needs_no_code_change,
@@ -321,6 +362,7 @@ def main():
         test_derived_state_cannot_drift,
         test_ingestion_cannot_write_an_invalid_graph,
         test_path_labels_do_not_use_sentences_as_names,
+        test_same_title_is_a_duplicate_only_when_the_ontology_says_so,
     ]
     failures = 0
     for test in tests:
@@ -336,3 +378,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

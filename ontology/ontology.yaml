@@ -36,6 +36,7 @@ object_types:
 
   Person:
     title_attribute: display_name
+    title_is_identity: true     # same name -> same object; a collision is a duplicate
     attributes:
       display_name: { type: string, required: true }
       given_name:   { type: string }
@@ -46,6 +47,7 @@ object_types:
 
   Organization:
     title_attribute: name
+    title_is_identity: true
     id_prefix: org
     attributes:
       name:     { type: string, required: true }

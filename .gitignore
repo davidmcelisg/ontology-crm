@@ -10,3 +10,6 @@ venv/
 .DS_Store
 .idea/
 .vscode/
+
+# Hand-written real network description; seed_real.py turns it into claims.
+data/network.local.yaml

@@ -94,6 +94,10 @@ class ObjectTypeDef:
     attributes: dict[str, AttributeDef]
     title_attribute: str | None = None
     id_prefix: str | None = None
+    # True when two objects with the same title are the same thing, as with a
+    # person's name. False for reified types whose title merely describes
+    # them: two "Software Engineer" affiliations are different objects.
+    title_is_identity: bool = False
     axioms: tuple[AxiomDef, ...] = ()
 
     @property

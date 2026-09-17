@@ -232,6 +232,11 @@ def mint_id(store: ClaimStore, type_name: str, body: dict[str, Any]) -> str:
 
     "Ana Ruiz" as a Person becomes person:ana-ruiz. Types with no title
     attribute, or an unusable one, fall back to a counter.
+
+    When the title is not an identity (title_is_identity is false) and the id
+    is already taken, a counter is appended: the second "Software Engineer"
+    affiliation becomes aff:software-engineer-2. Identity-titled types keep
+    the collision, so the caller can reject it as a duplicate.
     """
     object_type = store.registry.type(type_name)
     prefix = object_type.prefix
@@ -244,7 +249,15 @@ def mint_id(store: ClaimStore, type_name: str, body: dict[str, Any]) -> str:
         existing = len(store.all_of_type(type_name)) + 1
         slug = f"{existing:04d}"
 
-    return f"{prefix}:{slug}"
+    object_id = f"{prefix}:{slug}"
+    if object_type.title_is_identity:
+        return object_id
+
+    suffix = 2
+    while store.exists(object_id):
+        object_id = f"{prefix}:{slug}-{suffix}"
+        suffix += 1
+    return object_id
 
 
 def slugify(text: str) -> str:

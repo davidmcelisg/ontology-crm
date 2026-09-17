@@ -284,15 +284,54 @@ def propose(
 
 
 def apply(store: ClaimStore, proposal: Proposal) -> list[ActionResult]:
-    """Execute a confirmed proposal, in order, stopping at the first failure."""
+    """Execute a confirmed proposal, in order, stopping at the first failure.
+
+    The model refers to objects it is about to create by the id it expects them
+    to get. If minting appends a suffix (a second "Coffee" interaction), later
+    references are rewritten to the id actually minted.
+    """
     results: list[ActionResult] = []
+    remap: dict[str, str] = {}
 
     for proposed in proposal.actions:
         if not proposed.valid:
             raise ActionError(f"{proposed.name} did not validate; nothing further applied")
-        results.append(execute(store, proposed.name, proposed.params))
+
+        params = _remap_ids(proposed.params, remap)
+        result = execute(store, proposed.name, params)
+        results.append(result)
+
+        if result.created:
+            expected = _expected_id(store, proposed.name, params)
+            if expected is not None and expected != result.object_id:
+                remap[expected] = result.object_id
 
     return results
+
+
+def _expected_id(store: ClaimStore, action_name: str, params: dict[str, Any]) -> str | None:
+    """The id the model would have predicted for a create, before any suffix."""
+    type_name = store.registry.action(action_name).creates
+    if type_name is None:
+        return None
+    object_type = store.registry.type(type_name)
+    title = params.get(object_type.title_attribute) if object_type.title_attribute else None
+    slug = slugify(title) if isinstance(title, str) else ""
+    if not slug:
+        return None
+    return f"{object_type.prefix}:{slug}"
+
+
+def _remap_ids(value: Any, remap: dict[str, str]) -> Any:
+    if not remap:
+        return value
+    if isinstance(value, dict):
+        return {key: _remap_ids(item, remap) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_remap_ids(item, remap) for item in value]
+    if isinstance(value, str):
+        return remap.get(value, value)
+    return value
 
 
 def render(store: ClaimStore, proposal: Proposal) -> str:

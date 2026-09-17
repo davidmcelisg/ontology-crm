@@ -1,0 +1,110 @@
+# Format for data/network.local.yaml (gitignored). Every name below is invented.
+#
+# Only `me:` and `people:` are needed to get started; the other sections are
+# optional. Names in `at`, `with`, `heard_from`, etc. must match a `name` or
+# `aliases` entry declared in this file (case-insensitive). "me" is you.
+#
+# Then:  python scripts/seed_real.py --dry-run     (validate)
+#        python scripts/seed_real.py               (write data/claims.jsonl)
+
+me: David
+
+orgs:
+  - name: Northwind Analytics
+    aliases: [Northwind]
+    kind: company            # company | university | student_org | nonprofit | government | other
+    location: CDMX
+  - name: Cardinal Group
+    kind: company
+  - name: Cardinal Group Mexico
+    kind: company
+    parent: Cardinal Group
+  - name: HackDay
+    kind: student_org
+
+people:
+  - name: Teo Marin
+    aliases: [Teo]
+    based_in: CDMX
+    at: Northwind Analytics       # shorthand for one affiliation
+    role: Software Engineer
+    since: 2025-01-15
+    relationship: friend          # family | friend | colleague | classmate | mentor | mentee | recruiter | acquaintance
+    strength: 5                   # 1-5, how close, from your side
+    how_we_met: university
+
+  - name: Nayeli Ochoa
+    at: Northwind Analytics
+    role: Recruiter
+    since: 2025-06-01
+    relationship: friend
+    strength: 4
+    how_we_met: through Teo
+
+  - name: Bruno Salas
+    at: Northwind Analytics
+    role: Co-founder
+    affiliation_kind: founder     # employee (default) | intern | student | founder | member | alumnus | contractor | advisor
+    seniority: executive          # ic | senior | manager | director | vp | executive
+    since: 2023-02-01
+    relationship: acquaintance
+    strength: 3
+    how_we_met: spoke when the company was tiny
+
+  - name: Ivette Cano
+    at: Northwind Analytics
+    role: CTO
+    seniority: executive
+    since: 2023-02-01
+
+  - name: Rosa Delgado
+    aliases: [Rosa]
+    affiliations:                 # long form, for several jobs or past ones
+      - org: Cardinal Group Mexico
+        role: Consultant
+        since: 2024-03-01
+      - org: HackDay
+        kind: alumnus
+        until: 2024-06-01
+    heard_from: Teo Marin         # source becomes told_by_person / person:teo
+    source_note: mentioned at a dinner
+    relationship: acquaintance
+    strength: 3
+    how_we_met: HackDay sponsor dinner
+    notes: thinking about leaving Cardinal
+
+interactions:
+  - when: 2026-09-03T18:00:00
+    with: [Nayeli Ochoa]
+    channel: call                 # in_person | call | video | email | text | whatsapp | linkedin | other
+    direction: inbound            # outbound | inbound | mutual (relative to you)
+    subject: A role might open up
+    about: [Northwind]
+  - when: 2026-09-09T11:00:00
+    with: Teo
+    channel: whatsapp
+    direction: inbound
+    subject: Can you review my resume?
+    expects_response: true
+
+commitments:
+  - who_owes: me
+    to: Teo
+    what: send feedback on his resume
+    from_interaction: Can you review my resume?   # matches an interaction subject
+    due: 2026-09-16
+
+pursuits:
+  - org: Northwind
+    role: Forward Deployed Engineer
+    kind: recruiting_process      # job_application | recruiting_process | business_development | fellowship | grad_school
+    stage: first round passed
+    opened: 2026-09-05
+    referred_by: Nayeli Ochoa
+
+intros:
+  - by: Teo
+    a: me
+    b: Ivette Cano
+    date: 2026-09-06
+    context: put me in touch before the CTO round

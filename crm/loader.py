@@ -192,6 +192,7 @@ def _parse_object_type(type_name: str, spec: Any, errors: _Errors) -> ObjectType
         attributes=attributes,
         title_attribute=spec.get("title_attribute"),
         id_prefix=spec.get("id_prefix"),
+        title_is_identity=bool(spec.get("title_is_identity", False)),
         axioms=tuple(axioms),
     )
 

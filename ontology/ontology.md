@@ -210,6 +210,13 @@ rendering composes a title from whoever the object connects to instead:
 the type nothing — omitting `title_attribute` is enough to get the composed
 form.
 
+A title also seeds the id, and here the two kinds of title differ again. A
+second `Person` named Rosa Delgado is almost certainly the same Rosa, so
+`Person` and `Organization` declare `title_is_identity: true` and a colliding
+create is rejected as a duplicate. A second `Affiliation` titled "Software
+Engineer" or a second `Interaction` titled "Coffee" is a different object, so
+for every other type minting appends a counter: `aff:software-engineer-2`.
+
 ---
 
 ## 3. Link types
