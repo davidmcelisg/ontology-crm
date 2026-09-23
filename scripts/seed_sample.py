@@ -9,6 +9,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from datetime import datetime, timezone
+
 from crm import ClaimStore, load_ontology
 
 ONTOLOGY = "ontology/ontology.yaml"
@@ -16,9 +18,14 @@ SAMPLE = "data/sample_claims.jsonl"
 
 
 def seed(store):
-    def put(type_name, object_id, body, kind="self_observed", who=None, note=None):
+    def put(type_name, object_id, body, kind="self_observed", who=None, note=None,
+            learned=None):
         store.assert_object(type_name, object_id, body, source_kind=kind,
-                            source_person=who, source_note=note)
+                            source_person=who, source_note=note,
+                            asserted_at=_on(learned) if learned else None)
+
+    def _on(day):
+        return datetime.fromisoformat(day).replace(tzinfo=timezone.utc)
 
     people = [
         ("person:david", "David"),
@@ -48,7 +55,15 @@ def seed(store):
     put("Relationship", "rel:david-bruno", {"from_person": "person:david", "to_person": "person:bruno", "kind": "acquaintance", "strength": 3, "origin_context": "spoke when the company was tiny"})
     put("Relationship", "rel:david-rosa", {"from_person": "person:david", "to_person": "person:rosa", "kind": "acquaintance", "strength": 3, "origin_context": "HackDay sponsor dinner"})
 
-    put("Pursuit", "pursuit:northwind-fde", {"kind": "recruiting_process", "target_organization": "org:northwind", "target_role": "Forward Deployed Engineer", "stage": "first round passed", "outcome": "open", "opened_at": "2026-09-05", "referred_by": "person:nayeli"})
+    # Three claims about one pursuit, so the stage history falls out of the log
+    # for free. Nothing stores a timeline; replaying the claims is the timeline.
+    put("Pursuit", "pursuit:northwind-fde", {"kind": "recruiting_process", "target_organization": "org:northwind", "target_role": "Forward Deployed Engineer", "stage": "applied", "outcome": "open", "opened_at": "2026-09-05", "referred_by": "person:nayeli"},
+        learned="2026-09-05T09:00:00")
+    put("Pursuit", "pursuit:northwind-fde", {"stage": "screen with recruiter"},
+        kind="told_by_person", who="person:nayeli", note="she scheduled it over the phone",
+        learned="2026-09-07T17:00:00")
+    put("Pursuit", "pursuit:northwind-fde", {"stage": "first round passed"},
+        learned="2026-09-12T12:00:00")
 
     put("Interaction", "interaction:0001", {"occurred_at": "2026-09-03T18:00:00", "channel": "call", "direction": "inbound", "participants": ["person:david", "person:nayeli"], "subject": "A role might open up", "expects_response": False, "about": ["org:northwind"]})
     put("Interaction", "interaction:0002", {"occurred_at": "2026-09-08T09:00:00", "channel": "email", "direction": "outbound", "participants": ["person:david", "person:bruno"], "subject": "Following up on the role", "expects_response": True, "about": ["pursuit:northwind-fde"]})

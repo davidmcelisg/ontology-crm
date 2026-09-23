@@ -17,7 +17,7 @@ handle it with no code change.
     python -m crm.loader ontology/ontology.yaml    # inspect the ontology
     python scripts/seed_sample.py                  # build a fake network
     python scripts/demo.py                         # answer real questions
-    python tests/test_ontology_driven.py           # the four arguments
+    python tests/test_ontology_driven.py           # the design arguments
 
 To run it on your own network, and for the ingestion scripts, see `DEMO.md` (the commands) and `CALLS.md` (what each one does).
 
@@ -50,7 +50,7 @@ true in the world, and when you learned it. Nothing is ever updated in place.
 owes me a reply" is computed from the interaction chain every time, so it
 cannot drift out of sync with reality.
 
-**Actions are the only mutation.** Twelve declared, typed, validated. Their
+**Actions are the only mutation.** Thirteen declared, typed, validated. Their
 schemas are generated from the ontology, which is what will let an LLM write to
 the graph without being able to corrupt it.
 

@@ -1,4 +1,4 @@
-"""The four arguments, as runnable assertions.
+"""The design arguments, as runnable assertions.
 
 These double as the demo script: each one is a claim about the design that you
 can prove on screen in a few seconds.
@@ -206,6 +206,33 @@ def test_updates_need_no_per_action_code():
     assert store.resolve("pursuit:strategy-lead")["stage"] == "onsite"
 
 
+def test_a_self_referencing_type_declares_its_update_target():
+    """Inference is ambiguous when a type refers to itself, so the yaml says which."""
+    from crm.actions import execute
+
+    store = fresh_store(load_ontology(ONTOLOGY))
+
+    execute(store, "CreateOrganization", {"name": "Small Co", "kind": "company"})
+    execute(store, "CreateOrganization", {"name": "Big Co", "kind": "company"})
+    execute(store, "CreatePerson", {"display_name": "W"})
+    execute(store, "AssertAffiliation", {
+        "person": "person:w", "organization": "org:small-co", "kind": "employee",
+        "role_title": "Engineer",
+    })
+
+    # Two parameters point at Organization; the declaration picks the target.
+    execute(store, "UpdateOrganization",
+            {"organization": "org:small-co", "parent": "org:big-co"})
+
+    assert store.resolve("org:small-co")["parent"] == "org:big-co"
+    assert store.resolve("org:small-co")["name"] == "Small Co"   # delta, not replace
+
+    # And the roll-up follows, so a contact at the subsidiary answers for the parent.
+    from crm import functions
+    contacts = functions.who_do_i_know_at(store, "org:big-co")
+    assert [contact["person"] for contact in contacts] == ["person:w"]
+
+
 def test_derived_state_cannot_drift():
     """There is no awaiting_reply field. Answering the message changes the answer."""
     store = fresh_store(load_ontology(ONTOLOGY))
@@ -359,6 +386,7 @@ def main():
         test_retraction_undoes_inherited_values,
         test_a_merge_is_one_claim_and_reversible,
         test_updates_need_no_per_action_code,
+        test_a_self_referencing_type_declares_its_update_target,
         test_derived_state_cannot_drift,
         test_ingestion_cannot_write_an_invalid_graph,
         test_path_labels_do_not_use_sentences_as_names,

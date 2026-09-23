@@ -309,6 +309,22 @@ actions:
     creates: Organization
     parameters: inherit
 
+  UpdateOrganization:
+    updates: Organization
+    # Organization.parent points at Organization, so two parameters here target
+    # the type being updated and the executor cannot infer which is which.
+    # Naming it is the declarative fix; nothing else about the action is special.
+    target_parameter: organization
+    parameters:
+      organization: { type: ref, target: Organization, required: true }
+      name:     { type: string }
+      kind:
+        type: enum
+        values: [company, university, student_org, nonprofit, government, other]
+      location: { type: string }
+      parent:   { type: ref, target: Organization }
+      notes:    { type: text }
+
   AssertAffiliation:
     creates: Affiliation
     parameters: inherit

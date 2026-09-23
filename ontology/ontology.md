@@ -177,8 +177,9 @@ Pursuit:
 Note what is *not* here: a stage-history table. Because claims are append-only and
 timestamped (P3), the full stage history falls out of the claim log for free. Each
 `AdvancePursuit` writes a new claim; replaying claims for that Pursuit gives you
-the timeline. This is the clearest payoff of the claim model and worth
-demonstrating.
+the timeline. This is the clearest payoff of the claim model, and `scripts/demo.py`
+prints it: the `why do I believe` section replays whichever object has the
+richest claim history, which on the sample network is exactly this.
 
 ### 2.8 `Commitment`
 
@@ -303,6 +304,7 @@ these and nothing else, which means it cannot produce an invalid graph.
 |---|---|---|
 | `CreatePerson` | display_name, aliases?, based_in? | |
 | `CreateOrganization` | name, kind, location?, parent? | |
+| `UpdateOrganization` | organization, name?, kind?, location?, parent?, notes? | declares `target_parameter` |
 | `AssertAffiliation` | person, organization, kind, role_title?, seniority?, start_date? | |
 | `EndAffiliation` | affiliation, end_date | new claim with `valid_to` |
 | `AssertRelationship` | from_person, to_person, kind, strength?, origin_context? | directed |
@@ -316,6 +318,14 @@ these and nothing else, which means it cannot produce an invalid graph.
 
 Every Action carries the claim metadata from section 4: `source_kind`,
 `source_person`, `source_note`, `asserted_at`.
+
+`UpdateOrganization` is the one action that names its own target. The executor
+normally infers which parameter holds the object being updated: an updating
+action has exactly one `ref` parameter pointing at the type it updates. That
+inference is ambiguous for a self-referencing type, because `Organization.parent`
+is also a ref to `Organization`. Rather than special-case it in code, the action
+declares `target_parameter: organization` and the declaration wins. Any future
+updating action on a self-referencing type gets the same treatment for free.
 
 `MergePersons` exists because free-text ingestion will inevitably create
 `person:ana` and `person:ana-ruiz` as separate objects. Aliases plus an explicit
@@ -427,7 +437,22 @@ than to be shown it.
 4. **Entity resolution is manual**, via `aliases` and `MergePersons`.
 5. **`self` is a config constant**, so the graph is single-perspective. Modelling
    multiple viewpoints would mean parameterising `direction` and `strength`.
-6. **No access control or encryption.** Relevant given the sensitivity of the
+6. **`MergePersons` is the only entity-resolution action, and it is Person-only.**
+   Two duplicate Organizations cannot be merged; the redirect machinery in the
+   store is type-agnostic, so this is a missing declaration rather than a
+   missing mechanism.
+7. **`direction: mutual` cannot open a thread.** `open_threads` sorts an
+   interaction into "they owe me" on `outbound` and "I owe them" on `inbound`.
+   A mutual interaction with `expects_response: true` is silently in neither
+   list. Debts in a two-way conversation belong in a `Commitment`, which is
+   what the model does; the gap is that nothing rejects the combination.
+8. **A `Commitment` has exactly one obligor.** Two people jointly promising one
+   thing has to be recorded as two commitments or attributed to one of them.
+9. **Nothing scheduled can be represented.** `Interaction.occurred_at` is
+   required and past-tense by construction, so "call booked for next week"
+   lives in a `Pursuit.stage` string. A `scheduled_for` attribute would be the
+   honest fix.
+10. **No access control or encryption.** Relevant given the sensitivity of the
    data, and more so once ingestion (section 6) is wired to a real model —
    `anthropic_completer()` sends note text to a third-party API. Out of scope
    for the first build.

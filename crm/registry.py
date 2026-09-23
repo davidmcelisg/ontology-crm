@@ -158,6 +158,12 @@ class ActionDef:
     Exactly one of creates / updates / special is set. Parameters are already
     expanded: `parameters: inherit` in the yaml has been resolved into the real
     attribute list by the time an ActionDef exists.
+
+    target_parameter names which parameter holds the object an updating action
+    acts on. Normally the executor infers it -- an updating action has exactly
+    one ref parameter pointing at the type it updates. That inference breaks on
+    a self-referencing type, where a second parameter (Organization.parent)
+    points at the same type, so those actions declare the target instead.
     """
 
     name: str
@@ -165,6 +171,7 @@ class ActionDef:
     creates: str | None = None
     updates: str | None = None
     special: str | None = None
+    target_parameter: str | None = None
     axioms: tuple[AxiomDef, ...] = ()
 
 

@@ -341,6 +341,27 @@ def _parse_action(
             "`parameters` must be a mapping or the string `inherit`",
         )
 
+    # Optional: say outright which parameter holds the object being updated.
+    # Only needed when inference is ambiguous, which happens exactly when the
+    # updated type refers to itself.
+    target_parameter = spec.get("target_parameter")
+    if target_parameter is not None:
+        if updates is None:
+            errors.add(
+                f"action {action_name}",
+                "`target_parameter` only applies to an action with `updates`",
+            )
+        elif target_parameter not in parameters:
+            errors.add(
+                f"action {action_name}",
+                f"target_parameter {target_parameter!r} is not a declared parameter",
+            )
+        elif updates not in parameters[target_parameter].ref_targets:
+            errors.add(
+                f"action {action_name}",
+                f"target_parameter {target_parameter!r} does not point at {updates!r}",
+            )
+
     axioms = []
     for axiom_spec in spec.get("axioms", ()):
         parsed = _parse_axiom(f"action {action_name}", axiom_spec, errors)
@@ -353,6 +374,7 @@ def _parse_action(
         creates=creates,
         updates=updates,
         special=special,
+        target_parameter=target_parameter,
         axioms=tuple(axioms),
     )
 

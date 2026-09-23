@@ -18,7 +18,7 @@ pip install -r requirements.txt
 python3 tests/test_ontology_driven.py
 ```
 
-Expect `9/9 passing`. Each test is one design argument you can point at.
+Expect `10/10 passing`. Each test is one design argument you can point at.
 
 ## 1. Mock demo
 
@@ -67,6 +67,14 @@ Same questions, your answers:
 python3 scripts/demo.py --claims data/claims.jsonl
 ```
 
+`--org` picks which organization the "who do I know at" question asks about.
+Without it the demo picks the org with the most contacts, preferring one with a
+parent so the subsidiary roll-up has something to show:
+
+```bash
+python3 scripts/demo.py --claims data/claims.jsonl --org org:primero
+```
+
 **$** Plain text in, proposed actions out, against your real roster. Still
 dry-run. Use a note about people who are actually in the file:
 
@@ -99,7 +107,7 @@ python3 -m crm.loader ontology/ontology.yaml
 
 The registry as the loader sees it: types, derived links, actions. Pairs with
 the line in `demo.py` output: *8 object types, 20 links derived from ref
-attributes, 12 actions* — none of them named in Python.
+attributes, 13 actions* — none of them named in Python.
 
 ```bash
 grep -c "" data/claims.jsonl
@@ -110,10 +118,11 @@ One line per claim, append-only. Open the file and every line has
 
 ## Order for a screen share
 
-1. `tests/` — four arguments, nine assertions, all green.
+1. `tests/` — four design arguments, ten assertions, all green.
 2. `demo.py` on the mock — the questions the system answers.
 3. `demo.py --claims data/claims.jsonl` — the same questions, real answers
-   (*Alan owes me a reply*, *why do I believe Isabel works at Banorte*).
+   (*Alan owes me a reply*, *who do I know at Adyen* rolling up through Orb,
+   and the provenance chain on whichever object has the richest claim history).
 4. `try_ingest.py` — text becomes actions; nothing written until confirmed.
 5. **$** `note.py --claims data/claims.jsonl "..."` — the real model resolving
    real names, you say `y`, then `demo.py` again shows the new answer.
@@ -129,7 +138,7 @@ One line per claim, append-only. Open the file and every line has
 | `data/claims.jsonl` | real claim log, gitignored |
 | `scripts/seed_sample.py` | writes the mock claim log |
 | `scripts/seed_real.py` | YAML → real claim log, through the validated action path |
-| `scripts/demo.py` | the questions; `--claims` picks the network |
+| `scripts/demo.py` | the questions; `--claims` picks the network, `--org` the org |
 | `scripts/try_ingest.py` | ingestion with a stubbed model, free |
 | `scripts/live_ingest.py` | ingestion with Sonnet 5, dry-run, costs cents |
 | `scripts/note.py` | ingestion with Sonnet 5, confirm, **writes**; costs cents |

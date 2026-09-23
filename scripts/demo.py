@@ -40,9 +40,28 @@ def pick_org(store):
     return by_org.most_common(1)[0][0] if by_org else None
 
 
+def pick_believed(store):
+    """The object with the richest claim history, so the provenance chain has
+    something to show. Most claims wins, ties broken by how many different
+    sources contributed. Nothing here names anything either."""
+    best = None
+    for type_name in store.registry.type_names():
+        for object_id in store.all_of_type(type_name):
+            history = store.history(object_id)
+            if len(history) < 2:
+                continue
+            score = (len(history), len({claim.source_kind for claim in history}))
+            if best is None or score > best[0]:
+                best = (score, object_id)
+    return best[1] if best else None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--claims", default=SAMPLE, help=f"claims file (default: {SAMPLE})")
+    parser.add_argument("--org", default=None,
+                        help="organization id for the 'who do I know at' question "
+                             "(default: the one with the most contacts)")
     args = parser.parse_args()
 
     registry = load_ontology(ONTOLOGY)
@@ -52,7 +71,7 @@ def main():
         print(f"No data in {args.claims}. Run scripts/seed_sample.py or scripts/seed_real.py first.")
         return 1
 
-    org = pick_org(store)
+    org = args.org or pick_org(store)
 
     print(f"{len(registry.object_types)} object types, "
           f"{len(registry.links)} links derived from ref attributes, "
@@ -71,7 +90,7 @@ def main():
 
     heading(f"who do I know at {query.title(store, org)} (rolls up through subsidiaries)")
     for contact in functions.who_do_i_know_at(store, org):
-        print(f"   {contact['name']:<16} {contact['role']:<22} "
+        print(f"   {contact['name']:<16} {contact['role'] or '(role unknown)':<22} "
               f"{contact['organization']}")
 
 
@@ -85,6 +104,18 @@ def main():
     for body in functions.outstanding_commitments(store, "owed_by_me").values():
         due = f", due {body['due_date']}" if body.get("due_date") else ""
         print(f"   {body['description']} -> {query.title(store, body['obligee'])}{due}")
+
+    believed = pick_believed(store)
+    if believed is not None:
+        heading(f"why do I believe what I believe about "
+                f"{query.title(store, believed)} ({believed})")
+        for entry in functions.why_do_i_believe(store, believed):
+            asserted = entry["asserted"]
+            if isinstance(asserted, dict):
+                asserted = ", ".join(f"{k}={v}" for k, v in asserted.items())
+            print(f"   {entry['learned']}  {entry['source']:<34} {asserted}")
+            if entry["note"]:
+                print(f"   {'':<12}  {'':<34} note: {entry['note']}")
 
     heading("relationships going stale")
     for entry in functions.going_stale(store):

@@ -187,11 +187,27 @@ def _split_target(
     is the type it updates. That parameter is the target; the rest is the delta.
     This is why EndAffiliation, AdvancePursuit and FulfillCommitment all work
     with no code of their own.
+
+    The rule is ambiguous when the updated type refers to itself -- an
+    Organization has a parent Organization, so two parameters point at the type
+    being updated. Those actions name the target in the yaml instead, and the
+    declaration wins over the inference.
     """
     action = store.registry.action(action_name)
 
     target_id = None
     target_param = None
+
+    if action.target_parameter is not None:
+        target_param = action.target_parameter
+        target_id = body.get(target_param)
+        if target_id is None:
+            raise ActionError(f"{action_name} is missing {target_param}")
+        changes = {}
+        for name, value in body.items():
+            if name != target_param:
+                changes[name] = value
+        return target_id, changes
 
     for name, attribute in action.parameters.items():
         if not attribute.is_ref:

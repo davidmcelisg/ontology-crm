@@ -211,13 +211,22 @@ class Seeder:
         where = f"commitments/{entry.get('what')}"
         created_in = (self.interaction(entry["from_interaction"], where)
                       if entry.get("from_interaction") else None)
-        self.run("MakeCommitment", {
+        object_id = self.run("MakeCommitment", {
             "obligor": self.person(entry.get("who_owes", "me"), where),
             "obligee": self.person(entry.get("to", "me"), where),
             "description": entry["what"],
             "created_in": created_in,
             "due_date": entry.get("due"),
         }, entry, where)
+
+        # A promise that was kept is two actions, not a flag: the commitment is
+        # made, then an interaction fulfils it. `fulfilled_by` names that
+        # interaction by subject.
+        if entry.get("fulfilled_by"):
+            self.run("FulfillCommitment", {
+                "commitment": object_id,
+                "fulfilled_by": self.interaction(entry["fulfilled_by"], where),
+            }, entry, where)
 
     def _pursuit(self, entry: dict[str, Any]) -> None:
         where = f"pursuits/{entry.get('org')}/{entry.get('role')}"
