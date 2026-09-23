@@ -287,9 +287,11 @@ def slugify(text: str) -> str:
 def lookup(store: ClaimStore, type_name: str, text: str) -> list[str]:
     """Find objects of a type whose title or aliases match some text.
 
-    The ingestion layer calls this before creating anything, which is how a
-    second mention of the same person avoids becoming a second object.
-    Matching is deliberately loose; ambiguity is the caller's to resolve.
+    Not on the ingestion path: there, the roster in the prompt does entity
+    resolution, because the model can weigh a candidate's linked context and a
+    slug comparison cannot. This is the same match by hand, for a caller that
+    has a name and wants the ids it might mean. Matching is deliberately loose;
+    ambiguity is the caller's to resolve.
     """
     object_type = store.registry.type(type_name)
     title_attribute = object_type.title_attribute

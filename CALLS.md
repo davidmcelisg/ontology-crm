@@ -110,15 +110,24 @@ the line in `demo.py` output: *8 object types, 20 links derived from ref
 attributes, 13 actions* — none of them named in Python.
 
 ```bash
-grep -c "" data/claims.jsonl
+grep -c "" data/claims.jsonl && tail -1 data/claims.jsonl
 ```
 
-One line per claim, append-only. Open the file and every line has
-`source_kind`, `asserted_at`, `supersedes`.
+One line per claim, append-only. Every line carries `source_kind`,
+`asserted_at` and `supersedes`, plus both read paths side by side: `changes` is
+the delta that claim asserted, `body` is the snapshot after merging it.
+
+The headline claim, checked rather than asserted. It reads the type names from
+the ontology and parses every module in `crm/`, skipping strings and comments:
+
+```bash
+python3 scripts/prove_data_driven.py
+```
 
 ## Order for a screen share
 
 1. `tests/` — four design arguments, ten assertions, all green.
+1b. `prove_data_driven.py` — 0 uses of any domain type as executable code.
 2. `demo.py` on the mock — the questions the system answers.
 3. `demo.py --claims data/claims.jsonl` — the same questions, real answers
    (*Alan owes me a reply*, *who do I know at Adyen* rolling up through Orb,
@@ -136,6 +145,7 @@ One line per claim, append-only. Open the file and every line has
 | `data/network.local.yaml` | your real network, gitignored |
 | `data/sample_claims.jsonl` | mock claim log, committed |
 | `data/claims.jsonl` | real claim log, gitignored |
+| `scripts/prove_data_driven.py` | proves no domain type is named in `crm/` code |
 | `scripts/seed_sample.py` | writes the mock claim log |
 | `scripts/seed_real.py` | YAML → real claim log, through the validated action path |
 | `scripts/demo.py` | the questions; `--claims` picks the network, `--org` the org |
