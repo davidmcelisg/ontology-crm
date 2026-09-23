@@ -1,4 +1,4 @@
-# Personal CRM — Ontology Design
+# Personal CRM: Ontology Design
 
 An ontology-driven personal CRM. The type system lives in data, not in code. The
 application reads these declarations at runtime; adding an object type is an edit
@@ -47,7 +47,7 @@ Person:
   display_name:  string
   given_name:    string?
   family_name:   string?
-  aliases:       [string] # "Ana", "Ana R." — feeds entity resolution
+  aliases:       [string] # "Ana", "Ana R."; feeds entity resolution
   based_in:      string?  # a claim about them, not derivable from affiliations
   notes:         text?
 ```
@@ -76,7 +76,7 @@ Organization:
 `parent` lets you model an office or a subsidiary without a new type (P4), and
 lets "who do I know at Bain" roll up across offices.
 
-### 2.3 `Affiliation` — reified Person ↔ Organization
+### 2.3 `Affiliation`: reified Person ↔ Organization
 
 ```yaml
 Affiliation:
@@ -88,14 +88,14 @@ Affiliation:
                              # | alumnus | contractor | advisor
   seniority:     enum?       # ic | senior | manager | director | vp | executive
   start_date:    date?
-  end_date:      date?       # absent means current (P2 — no is_current field)
+  end_date:      date?       # absent means current (P2, no is_current field)
 ```
 
 Reified because you care about employment *history*, not just the present. "Which
 HackMTY sponsor contacts are senior enough to matter now" is a query over
 `Affiliation`, not over `Person`.
 
-### 2.4 `Relationship` — reified, **directed** Person → Person
+### 2.4 `Relationship`: reified, **directed** Person → Person
 
 ```yaml
 Relationship:
@@ -200,7 +200,7 @@ waiting on," depending on which side `self_person_id` sits.
 ### 2.9 Naming objects with no natural name
 
 `Person.display_name` and `Organization.name` are titles anyone would
-recognize as a name. `Relationship` and `Introduction` are not — `kind` is an
+recognize as a name. `Relationship` and `Introduction` are not. `kind` is an
 enum like `acquaintance`, and `context` is a sentence, not a name. Declaring
 either as `title_attribute` would make `path_to` output read like a database
 dump instead of a sentence.
@@ -208,7 +208,7 @@ dump instead of a sentence.
 So neither type declares one. Where a type has no usable `title_attribute`,
 rendering composes a title from whoever the object connects to instead:
 `Introduction by Teo Marin`. The rule lives once, in `query.title`, and costs
-the type nothing — omitting `title_attribute` is enough to get the composed
+the type nothing, since omitting `title_attribute` is enough to get the composed
 form.
 
 A title also seeds the id, and here the two kinds of title differ again. A
@@ -306,15 +306,15 @@ these and nothing else, which means it cannot produce an invalid graph.
 | `CreateOrganization` | creates Organization | name, kind | location, parent, notes |
 | `UpdateOrganization` | updates Organization | organization | name, kind, location, parent, notes |
 | `AssertAffiliation` | creates Affiliation | person, organization, kind | role_title, seniority, start_date, end_date |
-| `EndAffiliation` | updates Affiliation | affiliation, end_date | — |
+| `EndAffiliation` | updates Affiliation | affiliation, end_date | (none) |
 | `AssertRelationship` | creates Relationship | from_person, to_person, kind | strength, origin_context, origin_interaction |
 | `RecordInteraction` | creates Interaction | occurred_at, channel, direction, participants | subject, summary, expects_response, in_reply_to, about |
 | `RecordIntroduction` | creates Introduction | introducer, introduced_a, introduced_b, occurred_at | context, resulting_interaction |
 | `OpenPursuit` | creates Pursuit | kind, target_organization, stage, outcome, opened_at | target_role, closed_at, referred_by, originated_in |
 | `AdvancePursuit` | updates Pursuit | pursuit, stage | outcome |
 | `MakeCommitment` | creates Commitment | obligor, obligee, description | created_in, due_date, fulfilled_by |
-| `FulfillCommitment` | updates Commitment | commitment, fulfilled_by | — |
-| `MergePersons` | entity resolution | keep, merge | — |
+| `FulfillCommitment` | updates Commitment | commitment, fulfilled_by | (none) |
+| `MergePersons` | entity resolution | keep, merge | (none) |
 
 Actions declaring `parameters: inherit` take the full attribute list of the type
 they create, which is why the required column above is longer than it looks in
@@ -353,7 +353,7 @@ Plus a small set of hand-written axioms:
 
 ---
 
-## 6. Ingestion — plain text to Actions
+## 6. Ingestion: plain text to Actions
 
 `crm/ingest.py` is where free-text notes become the Actions from section 5.
 It is the payoff of Actions being the only mutation path: the model proposes,
@@ -368,7 +368,7 @@ apply(store, proposal)         -> [ActionResult]  # execute, in order
 ```
 
 **The schema is generated, not written.** `action_schemas()` builds a JSON
-schema per Action straight from the registry — properties, required fields,
+schema per Action straight from the registry: properties, required fields,
 enum values, ref targets. A new Action added to `ontology.yaml` reaches the
 model on the next run with no prompt change.
 
@@ -376,13 +376,13 @@ model on the next run with no prompt change.
 object is listed with its id, title, aliases, and up to three linked
 neighbours, so "there are two Anas, but only one is linked to a recruiter
 role" is answerable from the prompt. The model is told to reuse an id from the
-roster rather than mint a new one — which is what keeps `person:ana` and
+roster rather than mint a new one, which is what keeps `person:ana` and
 `person:ana-ruiz` from becoming two people most of the time. `MergePersons`
 (section 5) is the fallback for when it doesn't.
 
 **Ids are deterministic**, so the model can create an object and reference it
 later in the same batch: `mint_id` slugifies the title attribute, so "Ana
-Ruiz" as a `Person` is always `person:ana-ruiz` — computable before the object
+Ruiz" as a `Person` is always `person:ana-ruiz`, computable before the object
 exists, not just after.
 
 **Validation runs twice against the same rules.** `propose` dry-runs every
@@ -397,7 +397,7 @@ no API key (`scripts/try_ingest.py` does exactly this), and swapping in
 
 This is also where P3 earns its keep on the ingestion side: every proposed
 action carries `source_kind: "prompt"` and, when the note names who told you,
-`source_person` — the same provenance fields a hand-typed Action needs, so a
+`source_person`, the same provenance fields a hand-typed Action needs, so a
 claim that came from an LLM reading a note is indistinguishable in the log
 from one you asserted yourself, except honestly labelled as `prompt` rather
 than `self_observed`.
@@ -413,7 +413,7 @@ Derived answers. Nothing here is stored.
 | `open_threads()` | Who owes me a reply, and who am I ignoring |
 | `outstanding_commitments(side)` | What I promised and dropped / what I'm owed |
 | `who_do_i_know_at(org)` | Current affiliations at an org or its children, ranked by relationship strength |
-| `path_to(target)` | Shortest route to a person or org, over any linked object type — typically Relationship, Affiliation, Introduction, or Commitment |
+| `path_to(target)` | Shortest route to a person or org, over any linked object type, typically Relationship, Affiliation, Introduction, or Commitment |
 | `pursuit_board()` | All open pursuits, stage, and whether a reply is outstanding |
 | `going_stale(months)` | Relationships with strength ≥ 3 and no interaction in N months |
 | `why_do_i_believe(object)` | Full claim chain with sources and dates |
@@ -432,7 +432,7 @@ Cut deliberately, and each has a stated reason. Better to have seen a gap coming
 than to be shown it.
 
 1. **A changed ontology does not migrate existing claims.** `store._decode_body`
-   deliberately skips the validator on load — `changes` is a partial body, so
+   deliberately skips the validator on load, because `changes` is a partial body, so
    every required attribute would report missing. The consequence is that
    renaming or removing a type breaks loading outright, and removing an
    attribute leaves values sitting unvalidated in history. Versioning the
@@ -465,7 +465,7 @@ than to be shown it.
    lives in a `Pursuit.stage` string. A `scheduled_for` attribute would be the
    honest fix.
 11. **No access control or encryption.** Relevant given the sensitivity of the
-   data, and more so once ingestion (section 6) is wired to a real model —
+   data, and more so once ingestion (section 6) is wired to a real model, since
    `anthropic_completer()` sends note text to a third-party API. Out of scope
    for the first build.
 12. **Reads are full scans.** `store.referrers` walks every object of every

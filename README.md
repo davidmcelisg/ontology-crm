@@ -2,27 +2,22 @@
 
 ## The problem
 
-I am in the middle of a job search and my network is the thing that actually
-moves it forward — who referred me where, who owes me a reply, which
-conversation a pursuit came out of. That lives across WhatsApp, LinkedIn, email
-and my memory, which means it mostly does not live anywhere.
+Managing my personal network during a job search. I wanted one place that:
 
-I wanted something I could dump a sentence into after a coffee — *"Coffee with
-Adrian, he says Michael will run my Paraform interview next week and I promised
-to send him my portfolio"* — and then ask questions of later. Who am I waiting
-on. What did I promise and drop. Who do I know at this company. How did I come
-to believe that in the first place.
+- maps every interaction, referral and commitment
+- answers questions over them: who owes me a reply, what did I promise, who do I know at a company
+- takes new entries as plain text, so logging a coffee is one sentence and not a form
 
 ## What it is
 
 A personal CRM where the type system lives in a YAML file instead of in the
 code. `ontology/ontology.yaml` declares what kinds of things exist, how they may
 connect, and what changes are legal. Every component reads that file at startup
-and builds a registry; no module in `crm/` mentions `Person`, `Pursuit` or any
+and builds a registry. No module in `crm/` mentions `Person`, `Pursuit` or any
 other domain type as executable code.
 
 Underneath it is an append-only JSONL claim log. Objects are never updated in
-place — a change is a new claim that supersedes an old one, carrying who told me
+place. A change is a new claim that supersedes an old one, carrying who told me
 and when. Nothing derived is stored: every function is a fold over that log,
 computed when you ask.
 
@@ -32,7 +27,7 @@ the model all handle it with no code change.
 
 The model cannot corrupt the graph, because Actions are the only write path and
 their schemas are generated from the ontology. It can only emit action names and
-parameters that the registry declares; anything else is rejected by the
+parameters that the registry declares. Anything else is rejected by the
 validator before a claim is written, and a batch containing one invalid action
 writes nothing at all.
 
@@ -82,37 +77,37 @@ looking for a domain type used as executable code, and finds none.
 
 Everything else follows from these.
 
-- **Thin objects, fat relationships.** Anything you would qualify with a date, a
+- **Thin objects, fat relationships:** anything you would qualify with a date, a
   source or an end gets its own type. `Person` holds almost nothing, because
   almost nothing about a person is permanently true.
-- **Never store a state that can be derived.** "Owes me a reply" is not a field,
+- **Never store a state that can be derived:** "owes me a reply" is not a field,
   it is a function over interactions. A stored status drifts; a derived one
   cannot.
-- **Every assertion is a claim, not a fact.** Network data is hearsay with an
+- **Every assertion is a claim, not a fact:** network data is hearsay with an
   expiry date. Storage is append-only and current state is a fold over the log.
-- **Scope grows by adding data, not types.** Family is not a type, it is a
+- **Scope grows by adding data, not types:** family is not a type, it is a
   `Relationship` with `kind: family`. Needing a new object type to cover a new
   part of life means the model is wrong.
 
 ## Object types
 
-- **Person** — identity only. No employer, no title, no history.
-- **Organization** — has an optional parent, so an office or a subsidiary needs
-  no new type and "who do I know at Adyen" rolls up through Orb.
-- **Affiliation** — reified Person ↔ Organization, because employment has a
+- **Person:** identity only. No employer, no title, no history.
+- **Organization:** has an optional parent, so an office or a subsidiary needs no
+  new type, and "who do I know at Adyen" rolls up through Orb.
+- **Affiliation:** reified Person ↔ Organization, because employment has a
   history and not just a present.
-- **Relationship** — reified and *directed* Person → Person. Ties are asymmetric
+- **Relationship:** reified and *directed* Person → Person. Ties are asymmetric
   in reality; a symmetric model halves the storage and lies.
-- **Interaction** — the atom. `in_reply_to` makes threads a chain rather than a
+- **Interaction:** the atom. `in_reply_to` makes threads a chain rather than a
   guess, which is what makes "who owes me a reply" computable.
-- **Introduction** — three participants, so it cannot be an edge under any
+- **Introduction:** three participants, so it cannot be an edge under any
   scheme. The cleanest argument for reification in the model.
-- **Pursuit** — any directed effort toward an outcome; job applications live
-  here. No stage-history table: claims are timestamped, so the history is free.
-- **Commitment** — who owes what to whom. Symmetric machinery answers both "what
+- **Pursuit:** any directed effort toward an outcome, so job applications live
+  here. No stage-history table: claims are timestamped, so history is free.
+- **Commitment:** who owes what to whom. Symmetric machinery answers both "what
   did I promise and drop" and "what am I owed."
 
-Full attribute-level detail is in [`ontology/ontology.md`](ontology/ontology.md).
+Attribute-level detail is in [`ontology/ontology.md`](ontology/ontology.md).
 
 ## Links
 
@@ -145,8 +140,8 @@ which is what makes the link registry impossible to desync from the types.
 ## Actions
 
 The only permitted mutations, and the only vocabulary the model is given. Every
-action additionally accepts the claim metadata — `asserted_at`, `valid_from`,
-`valid_to`, `source_kind`, `source_person`, `source_note`.
+action also accepts the claim metadata: `asserted_at`, `valid_from`, `valid_to`,
+`source_kind`, `source_person`, `source_note`.
 
 | Action | Effect | Required | Optional |
 |---|---|---|---|
@@ -154,15 +149,15 @@ action additionally accepts the claim metadata — `asserted_at`, `valid_from`,
 | `CreateOrganization` | creates Organization | name, kind | location, parent, notes |
 | `UpdateOrganization` | updates Organization | organization | name, kind, location, parent, notes |
 | `AssertAffiliation` | creates Affiliation | person, organization, kind | role_title, seniority, start_date, end_date |
-| `EndAffiliation` | updates Affiliation | affiliation, end_date | — |
+| `EndAffiliation` | updates Affiliation | affiliation, end_date | (none) |
 | `AssertRelationship` | creates Relationship | from_person, to_person, kind | strength, origin_context, origin_interaction |
 | `RecordInteraction` | creates Interaction | occurred_at, channel, direction, participants | subject, summary, expects_response, in_reply_to, about |
 | `RecordIntroduction` | creates Introduction | introducer, introduced_a, introduced_b, occurred_at | context, resulting_interaction |
 | `OpenPursuit` | creates Pursuit | kind, target_organization, stage, outcome, opened_at | target_role, closed_at, referred_by, originated_in |
 | `AdvancePursuit` | updates Pursuit | pursuit, stage | outcome |
 | `MakeCommitment` | creates Commitment | obligor, obligee, description | created_in, due_date, fulfilled_by |
-| `FulfillCommitment` | updates Commitment | commitment, fulfilled_by | — |
-| `MergePersons` | entity resolution | keep, merge | — |
+| `FulfillCommitment` | updates Commitment | commitment, fulfilled_by | (none) |
+| `MergePersons` | entity resolution | keep, merge | (none) |
 
 Only one action needed hand-written code. Creates mint an id from the title
 attribute; updates find the ref parameter pointing at the type being updated and
@@ -183,34 +178,6 @@ Derived answers. Nothing here is stored, and nothing here is cached.
 | `why_do_i_believe(object)` | The full claim chain, with sources and dates |
 | `reciprocity(person)` | Introductions and favours exchanged in each direction |
 
-## Limitations
-
-Cut deliberately, each for a stated reason.
-
-- **A changed ontology does not migrate old claims.** Loading skips validation by
-  design, so renaming a type breaks the load and dropping an attribute leaves
-  unvalidated values in history. The honest gap in the whole design.
-- **Claims attach to whole objects, not attributes.** If one person told me the
-  employer and another the title, one claim covers both.
-- **No confidence scores.** `source_kind` is a coarse proxy; a numeric confidence
-  invites a weighting scheme nobody can justify.
-- **Functions are Python, not a rule DSL.** The right end state, the wrong thing
-  to build first.
-- **Entity resolution is manual**, via aliases and `MergePersons`.
-- **`self` is a config constant**, so the graph is single-perspective.
-- **`MergePersons` is Person-only.** The redirect machinery in the store is
-  type-agnostic, so this is a missing declaration, not a missing mechanism.
-- **`direction: mutual` cannot open a thread.** Nothing rejects the combination;
-  it just lands in neither list.
-- **A Commitment has exactly one obligor.** Two people promising one thing has to
-  be two commitments.
-- **Nothing scheduled can be represented.** `occurred_at` is required and
-  past-tense, so "call booked for next week" lives in a `Pursuit.stage` string.
-- **No access control or encryption**, which matters more once ingestion is
-  wired to a third-party API.
-- **Reads are full scans.** Fine at personal-network scale, the first thing to
-  replace otherwise.
-
 ## Run it
 
 ```bash
@@ -223,7 +190,7 @@ The questions, answered from the claim log:
 python3 scripts/demo.py
 ```
 
-The headline claim, checked rather than asserted — every module in `crm/`
+The headline claim, checked rather than asserted. Every module in `crm/` gets
 parsed, looking for a domain type used as executable code:
 
 ```bash

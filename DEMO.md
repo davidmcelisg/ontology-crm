@@ -20,4 +20,4 @@ Real network:
 
 Details for each command are in `CALLS.md`. Steps 9 and 10 are the only ones that
 call the Anthropic API (~$0.03 each on Sonnet 5), and step 10 is the only one that
-writes — it asks `y/N` first. Everything else is free and offline.
+writes, and it asks `y/N` first. Everything else is free and offline.

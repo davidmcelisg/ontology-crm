@@ -107,7 +107,7 @@ python3 -m crm.loader ontology/ontology.yaml
 
 The registry as the loader sees it: types, derived links, actions. Pairs with
 the line in `demo.py` output: *8 object types, 20 links derived from ref
-attributes, 13 actions* — none of them named in Python.
+attributes, 13 actions*, none of them named in Python.
 
 ```bash
 grep -c "" data/claims.jsonl && tail -1 data/claims.jsonl
@@ -126,14 +126,14 @@ python3 scripts/prove_data_driven.py
 
 ## Order for a screen share
 
-1. `tests/` — four design arguments, ten assertions, all green.
-1b. `prove_data_driven.py` — 0 uses of any domain type as executable code.
-2. `demo.py` on the mock — the questions the system answers.
-3. `demo.py --claims data/claims.jsonl` — the same questions, real answers
+1. `tests/`: four design arguments, ten assertions, all green.
+1b. `prove_data_driven.py`: 0 uses of any domain type as executable code.
+2. `demo.py` on the mock: the questions the system answers.
+3. `demo.py --claims data/claims.jsonl`: the same questions, real answers
    (*Alan owes me a reply*, *who do I know at Adyen* rolling up through Orb,
    and the provenance chain on whichever object has the richest claim history).
-4. `try_ingest.py` — text becomes actions; nothing written until confirmed.
-5. **$** `note.py --claims data/claims.jsonl "..."` — the real model resolving
+4. `try_ingest.py`: text becomes actions; nothing written until confirmed.
+5. **$** `note.py --claims data/claims.jsonl "..."`: the real model resolving
    real names, you say `y`, then `demo.py` again shows the new answer.
 
 ## What each file is
