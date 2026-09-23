@@ -300,21 +300,26 @@ The only permitted way to change the ontology. Each has typed parameters,
 validation, and declared effects. The LLM ingestion layer (section 6) emits
 these and nothing else, which means it cannot produce an invalid graph.
 
-| Action | Parameters | Notes |
-|---|---|---|
-| `CreatePerson` | display_name, aliases?, based_in? | |
-| `CreateOrganization` | name, kind, location?, parent? | |
-| `UpdateOrganization` | organization, name?, kind?, location?, parent?, notes? | declares `target_parameter` |
-| `AssertAffiliation` | person, organization, kind, role_title?, seniority?, start_date? | |
-| `EndAffiliation` | affiliation, end_date | new claim with `valid_to` |
-| `AssertRelationship` | from_person, to_person, kind, strength?, origin_context? | directed |
-| `RecordInteraction` | participants, occurred_at, channel, direction, summary?, expects_response?, in_reply_to?, about? | |
-| `RecordIntroduction` | introducer, introduced_a, introduced_b, occurred_at, context? | |
-| `OpenPursuit` | kind, target_organization, target_role?, referred_by? | |
-| `AdvancePursuit` | pursuit, stage, outcome? | writes a claim; history is free |
-| `MakeCommitment` | obligor, obligee, description, due_date?, created_in? | |
-| `FulfillCommitment` | commitment, fulfilled_by | |
-| `MergePersons` | keep, merge | entity resolution; folds aliases |
+| Action | Effect | Required | Optional |
+|---|---|---|---|
+| `CreatePerson` | creates Person | display_name | given_name, family_name, aliases, based_in, notes |
+| `CreateOrganization` | creates Organization | name, kind | location, parent, notes |
+| `UpdateOrganization` | updates Organization | organization | name, kind, location, parent, notes |
+| `AssertAffiliation` | creates Affiliation | person, organization, kind | role_title, seniority, start_date, end_date |
+| `EndAffiliation` | updates Affiliation | affiliation, end_date | — |
+| `AssertRelationship` | creates Relationship | from_person, to_person, kind | strength, origin_context, origin_interaction |
+| `RecordInteraction` | creates Interaction | occurred_at, channel, direction, participants | subject, summary, expects_response, in_reply_to, about |
+| `RecordIntroduction` | creates Introduction | introducer, introduced_a, introduced_b, occurred_at | context, resulting_interaction |
+| `OpenPursuit` | creates Pursuit | kind, target_organization, stage, outcome, opened_at | target_role, closed_at, referred_by, originated_in |
+| `AdvancePursuit` | updates Pursuit | pursuit, stage | outcome |
+| `MakeCommitment` | creates Commitment | obligor, obligee, description | created_in, due_date, fulfilled_by |
+| `FulfillCommitment` | updates Commitment | commitment, fulfilled_by | — |
+| `MergePersons` | entity resolution | keep, merge | — |
+
+Actions declaring `parameters: inherit` take the full attribute list of the type
+they create, which is why the required column above is longer than it looks in
+the yaml. `EndAffiliation` writes a claim carrying `valid_to`; `AdvancePursuit`
+writes a claim, so stage history is free.
 
 Every Action carries the claim metadata from section 4: `source_kind`,
 `source_person`, `source_note`, `asserted_at`.
@@ -426,33 +431,43 @@ open thread when the most recent interaction in a reply chain is outbound,
 Cut deliberately, and each has a stated reason. Better to have seen a gap coming
 than to be shown it.
 
-1. **Claims attach to whole objects, not individual attributes.** If Isa told you
+1. **A changed ontology does not migrate existing claims.** `store._decode_body`
+   deliberately skips the validator on load — `changes` is a partial body, so
+   every required attribute would report missing. The consequence is that
+   renaming or removing a type breaks loading outright, and removing an
+   attribute leaves values sitting unvalidated in history. Versioning the
+   ontology and replaying the log through the new declarations is the fix; it
+   is the largest gap in the design.
+2. **Claims attach to whole objects, not individual attributes.** If Isa told you
    the employer and Ana told you the title, one claim covers both. Attribute-level
    provenance is the natural extension and requires no change to the type system,
    only a finer-grained claim body.
-2. **No confidence scores.** `source_kind` is a coarse proxy. Adding a numeric
+3. **No confidence scores.** `source_kind` is a coarse proxy. Adding a numeric
    confidence invites a weighting scheme nobody can justify.
-3. **Functions are Python, not a rule DSL.** A declarative rule language is the
+4. **Functions are Python, not a rule DSL.** A declarative rule language is the
    right end state and the wrong thing to build first.
-4. **Entity resolution is manual**, via `aliases` and `MergePersons`.
-5. **`self` is a config constant**, so the graph is single-perspective. Modelling
+5. **Entity resolution is manual**, via `aliases` and `MergePersons`.
+6. **`self` is a config constant**, so the graph is single-perspective. Modelling
    multiple viewpoints would mean parameterising `direction` and `strength`.
-6. **`MergePersons` is the only entity-resolution action, and it is Person-only.**
+7. **`MergePersons` is the only entity-resolution action, and it is Person-only.**
    Two duplicate Organizations cannot be merged; the redirect machinery in the
    store is type-agnostic, so this is a missing declaration rather than a
    missing mechanism.
-7. **`direction: mutual` cannot open a thread.** `open_threads` sorts an
+8. **`direction: mutual` cannot open a thread.** `open_threads` sorts an
    interaction into "they owe me" on `outbound` and "I owe them" on `inbound`.
    A mutual interaction with `expects_response: true` is silently in neither
    list. Debts in a two-way conversation belong in a `Commitment`, which is
    what the model does; the gap is that nothing rejects the combination.
-8. **A `Commitment` has exactly one obligor.** Two people jointly promising one
+9. **A `Commitment` has exactly one obligor.** Two people jointly promising one
    thing has to be recorded as two commitments or attributed to one of them.
-9. **Nothing scheduled can be represented.** `Interaction.occurred_at` is
+10. **Nothing scheduled can be represented.** `Interaction.occurred_at` is
    required and past-tense by construction, so "call booked for next week"
    lives in a `Pursuit.stage` string. A `scheduled_for` attribute would be the
    honest fix.
-10. **No access control or encryption.** Relevant given the sensitivity of the
+11. **No access control or encryption.** Relevant given the sensitivity of the
    data, and more so once ingestion (section 6) is wired to a real model —
    `anthropic_completer()` sends note text to a third-party API. Out of scope
    for the first build.
+12. **Reads are full scans.** `store.referrers` walks every object of every
+   referring type to answer "what points at this". Fine at personal-network
+   scale; the first thing to replace if the log ever grows.
