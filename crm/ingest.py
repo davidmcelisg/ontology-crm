@@ -87,6 +87,11 @@ def action_schemas(registry: Registry) -> dict[str, Any]:
         required: list[str] = []
 
         for name, attribute in parameters.items():
+            # asserted_at is when *I* learned something, which for an ingested
+            # note is always now. The store stamps it at execution time, so it
+            # is not offered here and is discarded if the model sends it anyway.
+            if name == "asserted_at":
+                continue
             properties[name] = _attribute_schema(attribute)
             if attribute.required and name not in ("asserted_at", "source_kind"):
                 required.append(name)
@@ -266,6 +271,12 @@ def propose(
         name = entry.get("action", "")
         params = entry.get("params", {}) or {}
         reason = entry.get("reason", "")
+
+        # A model told "today is 2026-09-23" tends to answer with the bare date,
+        # which parses to midnight. That sorts *before* claims written earlier
+        # the same day, so an update would silently lose to the value it meant
+        # to supersede. Belief time is the store's to assign, not the model's.
+        params.pop("asserted_at", None)
 
         if not store.registry.has_action(name):
             actions.append(

@@ -359,6 +359,9 @@ actions:
       outcome:
         type: enum
         values: [open, offer, rejected, withdrawn, stale]
+      # A pursuit is often opened before the role has a name ("they referred me
+      # internally"). Without this the title could only ever be set at creation.
+      target_role: { type: string }
 
   MakeCommitment:
     creates: Commitment

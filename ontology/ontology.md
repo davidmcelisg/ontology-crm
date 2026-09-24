@@ -311,7 +311,7 @@ these and nothing else, which means it cannot produce an invalid graph.
 | `RecordInteraction` | creates Interaction | occurred_at, channel, direction, participants | subject, summary, expects_response, in_reply_to, about |
 | `RecordIntroduction` | creates Introduction | introducer, introduced_a, introduced_b, occurred_at | context, resulting_interaction |
 | `OpenPursuit` | creates Pursuit | kind, target_organization, stage, outcome, opened_at | target_role, closed_at, referred_by, originated_in |
-| `AdvancePursuit` | updates Pursuit | pursuit, stage | outcome |
+| `AdvancePursuit` | updates Pursuit | pursuit, stage | outcome, target_role |
 | `MakeCommitment` | creates Commitment | obligor, obligee, description | created_in, due_date, fulfilled_by |
 | `FulfillCommitment` | updates Commitment | commitment, fulfilled_by | (none) |
 | `MergePersons` | entity resolution | keep, merge | (none) |
