@@ -476,6 +476,11 @@ than to be shown it.
    data, and more so once ingestion (section 6) is wired to a real model, since
    `anthropic_completer()` sends note text to a third-party API. Out of scope
    for the first build.
-12. **Reads are full scans.** `store.referrers` walks every object of every
+12. **Applying a batch is checked, not transactional.** `apply` refuses to run
+   unless every action validated, so nothing half-writes on a validation
+   failure. Referential checks run later, at execution, so an action that fails
+   there leaves its predecessors written. Undoing them means retracting them,
+   which the store supports but nothing does automatically.
+13. **Reads are full scans.** `store.referrers` walks every object of every
    referring type to answer "what points at this". Fine at personal-network
    scale; the first thing to replace if the log ever grows.

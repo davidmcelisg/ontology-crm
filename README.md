@@ -28,8 +28,8 @@ the model all handle it with no code change.
 The model cannot corrupt the graph, because Actions are the only write path and
 their schemas are generated from the ontology. It can only emit action names and
 parameters that the registry declares. Anything else is rejected by the
-validator before a claim is written, and a batch containing one invalid action
-writes nothing at all.
+validator before a claim is written, and no batch runs until every action in it
+has validated.
 
 **8 object types · 20 links derived automatically · 14 actions · 8 functions**
 

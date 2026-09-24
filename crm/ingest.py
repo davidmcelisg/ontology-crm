@@ -295,19 +295,29 @@ def propose(
 
 
 def apply(store: ClaimStore, proposal: Proposal) -> list[ActionResult]:
-    """Execute a confirmed proposal, in order, stopping at the first failure.
+    """Execute a confirmed proposal, in order.
+
+    The whole batch is checked before any of it runs. Checking each action as
+    it came would leave the valid ones ahead of a bad one already on disk, and
+    the log is append-only, so there would be nothing to roll back.
+
+    This covers everything the validator can see on its own. It does not make
+    the batch transactional: an action can still fail at execution time, when
+    referential checks run against the store, and by then its predecessors are
+    written. Undoing those means retracting them.
 
     The model refers to objects it is about to create by the id it expects them
     to get. If minting appends a suffix (a second "Coffee" interaction), later
     references are rewritten to the id actually minted.
     """
+    for proposed in proposal.actions:
+        if not proposed.valid:
+            raise ActionError(f"{proposed.name} did not validate; nothing applied")
+
     results: list[ActionResult] = []
     remap: dict[str, str] = {}
 
     for proposed in proposal.actions:
-        if not proposed.valid:
-            raise ActionError(f"{proposed.name} did not validate; nothing further applied")
-
         params = _remap_ids(proposed.params, remap)
         result = execute(store, proposed.name, params)
         results.append(result)

@@ -306,6 +306,28 @@ def test_ingestion_cannot_write_an_invalid_graph():
     schemas = ingest.action_schemas(store.registry)
     assert set(schemas) == set(store.registry.action_names())
 
+    # A good action ahead of a bad one must not sneak through. The batch is
+    # checked before any of it runs, because an append-only log has no rollback.
+    def stub_mixed(system_prompt, user_prompt):
+        return json.dumps({"actions": [
+            {"action": "CreatePerson", "params": {"display_name": "Canary"}},
+            {"action": "RecordInteraction", "params": {
+                "occurred_at": "2026-09-14T11:00:00", "channel": "smoke_signal",
+                "direction": "mutual", "participants": ["person:david", "person:rosa"]}},
+        ]})
+
+    proposal = ingest.propose(store, "note", stub_mixed, today="2026-09-15")
+    assert not proposal.valid
+    assert proposal.actions[0].valid          # the first one is fine on its own
+    before = store.claim_count()
+    try:
+        ingest.apply(store, proposal)
+        raise AssertionError("apply should have refused the whole batch")
+    except ActionError:
+        pass
+    assert store.claim_count() == before
+    assert not store.exists("person:canary")
+
 
 def test_path_labels_do_not_use_sentences_as_names():
     """Reified hops are named by who they connect, not by kind or context."""
