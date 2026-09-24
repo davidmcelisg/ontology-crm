@@ -27,17 +27,22 @@ def heading(text):
 
 
 def pick_org(store):
-    """The organization with the most contacts, preferring one with a parent
-    so the subsidiary roll-up has something to show."""
+    """The organization I know the most people at.
+
+    When that org has a parent, ask about the parent instead, so the answer
+    rolls up through the hierarchy rather than stopping at one subsidiary.
+    """
     me = store.registry.self_person_id
     by_org = Counter()
     for body in store.all_of_type("Affiliation").values():
         if body.get("person") != me:
             by_org[body["organization"]] += 1
-    for candidate, _ in by_org.most_common():
-        if store.resolve(candidate).get("parent"):
-            return store.resolve(candidate)["parent"]
-    return by_org.most_common(1)[0][0] if by_org else None
+    if not by_org:
+        return None
+    # Ties broken by id rather than by insertion order, so the same data always
+    # asks about the same organization.
+    best = min(by_org, key=lambda org_id: (-by_org[org_id], org_id))
+    return store.resolve(best).get("parent") or best
 
 
 def pick_believed(store):
@@ -51,7 +56,9 @@ def pick_believed(store):
             if len(history) < 2:
                 continue
             score = (len(history), len({claim.source_kind for claim in history}))
-            if best is None or score > best[0]:
+            # Ties broken by id, so the same network always picks the same
+            # object instead of drifting with dict ordering between runs.
+            if best is None or score > best[0] or (score == best[0] and object_id < best[1]):
                 best = (score, object_id)
     return best[1] if best else None
 
@@ -62,6 +69,9 @@ def main():
     parser.add_argument("--org", default=None,
                         help="organization id for the 'who do I know at' question "
                              "(default: the one with the most contacts)")
+    parser.add_argument("--believe", default=None,
+                        help="object id for the provenance chain "
+                             "(default: the one with the richest claim history)")
     args = parser.parse_args()
 
     registry = load_ontology(ONTOLOGY)
@@ -88,7 +98,9 @@ def main():
         print(f"   {query.title(store, thread.with_person):<16} "
               f"{thread.days_waiting:>3}d  {thread.subject}")
 
-    heading(f"who do I know at {query.title(store, org)} (rolls up through subsidiaries)")
+    children = query.descendants(store, org, "parent") - {org}
+    rollup = " (rolls up through subsidiaries)" if children else ""
+    heading(f"who do I know at {query.title(store, org)}{rollup}")
     for contact in functions.who_do_i_know_at(store, org):
         print(f"   {contact['name']:<16} {contact['role'] or '(role unknown)':<22} "
               f"{contact['organization']}")
@@ -105,7 +117,7 @@ def main():
         due = f", due {body['due_date']}" if body.get("due_date") else ""
         print(f"   {body['description']} -> {query.title(store, body['obligee'])}{due}")
 
-    believed = pick_believed(store)
+    believed = args.believe or pick_believed(store)
     if believed is not None:
         heading(f"why do I believe what I believe about "
                 f"{query.title(store, believed)} ({believed})")

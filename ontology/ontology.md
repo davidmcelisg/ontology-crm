@@ -314,6 +314,7 @@ these and nothing else, which means it cannot produce an invalid graph.
 | `AdvancePursuit` | updates Pursuit | pursuit, stage | outcome, target_role |
 | `MakeCommitment` | creates Commitment | obligor, obligee, description | created_in, due_date, fulfilled_by |
 | `FulfillCommitment` | updates Commitment | commitment, fulfilled_by | (none) |
+| `MergePursuits` | entity resolution | keep, merge | (none) |
 | `MergePersons` | entity resolution | keep, merge | (none) |
 
 Actions declaring `parameters: inherit` take the full attribute list of the type
@@ -332,9 +333,15 @@ is also a ref to `Organization`. Rather than special-case it in code, the action
 declares `target_parameter: organization` and the declaration wins. Any future
 updating action on a self-referencing type gets the same treatment for free.
 
-`MergePersons` exists because free-text ingestion will inevitably create
-`person:ana` and `person:ana-ruiz` as separate objects. Aliases plus an explicit
-merge Action is the cheap, honest answer to entity resolution.
+`MergePersons` and `MergePursuits` exist because free-text ingestion will
+inevitably create `person:ana` and `person:ana-ruiz` as separate objects, or open
+a second Pursuit for a role that was really the same application. Aliases plus an
+explicit merge Action is the cheap, honest answer to entity resolution.
+
+Neither action carries logic of its own. `special: entity_resolution` routes both
+to the same executor, and the redirect machinery in the store only requires that
+both objects share a type. Covering a second type was one declaration, which is
+the argument for keeping mutations declarative in the first place.
 
 ### Validation
 
@@ -449,9 +456,10 @@ than to be shown it.
 5. **Entity resolution is manual**, via `aliases` and `MergePersons`.
 6. **`self` is a config constant**, so the graph is single-perspective. Modelling
    multiple viewpoints would mean parameterising `direction` and `strength`.
-7. **`MergePersons` is the only entity-resolution action, and it is Person-only.**
-   Two duplicate Organizations cannot be merged; the redirect machinery in the
-   store is type-agnostic, so this is a missing declaration rather than a
+7. **Merging is declared per type, not available on all of them.** `Person` and
+   `Pursuit` have merge actions; the other six do not, so two duplicate
+   Organizations still cannot be merged. The redirect machinery in the store is
+   type-agnostic, so each of these is a missing declaration rather than a
    missing mechanism.
 8. **`direction: mutual` cannot open a thread.** `open_threads` sorts an
    interaction into "they owe me" on `outbound` and "I owe them" on `inbound`.

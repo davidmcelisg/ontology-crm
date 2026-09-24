@@ -31,7 +31,7 @@ parameters that the registry declares. Anything else is rejected by the
 validator before a claim is written, and a batch containing one invalid action
 writes nothing at all.
 
-**8 object types · 20 links derived automatically · 13 actions · 8 functions**
+**8 object types · 20 links derived automatically · 14 actions · 8 functions**
 
 ## Architecture
 
@@ -157,6 +157,7 @@ action also accepts the claim metadata: `asserted_at`, `valid_from`, `valid_to`,
 | `AdvancePursuit` | updates Pursuit | pursuit, stage | outcome, target_role |
 | `MakeCommitment` | creates Commitment | obligor, obligee, description | created_in, due_date, fulfilled_by |
 | `FulfillCommitment` | updates Commitment | commitment, fulfilled_by | (none) |
+| `MergePursuits` | entity resolution | keep, merge | (none) |
 | `MergePersons` | entity resolution | keep, merge | (none) |
 
 Only one action needed hand-written code. Creates mint an id from the title

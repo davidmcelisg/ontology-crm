@@ -373,6 +373,18 @@ actions:
       commitment:   { type: ref, target: Commitment, required: true }
       fulfilled_by: { type: ref, target: Interaction, required: true }
 
+  # Entity resolution is not Person-specific: the redirect machinery in the
+  # store only requires both objects be the same type as each other. Ingestion
+  # opened a second Pursuit for a role that was really the same application,
+  # so the second declaration is all it took to be able to fix it.
+  MergePursuits:
+    special: entity_resolution
+    parameters:
+      keep:  { type: ref, target: Pursuit, required: true }
+      merge: { type: ref, target: Pursuit, required: true }
+    axioms:
+      - { kind: not_equal, a: keep, b: merge }
+
   MergePersons:
     special: entity_resolution
     parameters:

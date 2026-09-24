@@ -275,11 +275,25 @@ def why_do_i_believe(store: ClaimStore, object_id: str) -> list[dict[str, Any]]:
                 "learned": claim.asserted_at.date(),
                 "source": source,
                 "note": claim.source_note,
-                "asserted": claim.changes if not claim.is_retraction else "RETRACTION",
+                "asserted": _what_it_asserted(claim),
             }
         )
 
     return trail
+
+
+def _what_it_asserted(claim: Any) -> Any:
+    """What a claim did, for display.
+
+    Three claims carry no body: a retraction, and a merge, which asserts only
+    that this object is really another one. Both would otherwise render as an
+    empty line.
+    """
+    if claim.is_retraction:
+        return "RETRACTION"
+    if claim.redirect_to is not None:
+        return f"MERGED into {claim.redirect_to}"
+    return claim.changes
 
 
 def reciprocity(store: ClaimStore, person_id: str) -> dict[str, int]:

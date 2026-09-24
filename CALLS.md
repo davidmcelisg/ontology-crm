@@ -107,7 +107,7 @@ python3 -m crm.loader ontology/ontology.yaml
 
 The registry as the loader sees it: types, derived links, actions. Pairs with
 the line in `demo.py` output: *8 object types, 20 links derived from ref
-attributes, 13 actions*, none of them named in Python.
+attributes, 14 actions*, none of them named in Python.
 
 ```bash
 grep -c "" data/claims.jsonl && tail -1 data/claims.jsonl
